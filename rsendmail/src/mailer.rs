@@ -7,6 +7,7 @@ use mail_send::SmtpClientBuilder;
 use std::{
     fs,
     time::{Duration, Instant},
+    sync::{atomic::{AtomicBool, Ordering}, Arc},
 };
 use tokio::{task, time::timeout};
 use walkdir::WalkDir;
@@ -20,7 +21,7 @@ impl Mailer {
         Self { config }
     }
 
-    pub async fn send_all(&self) -> Result<Stats> {
+    pub async fn send_all_with_cancel(&self, running: Arc<AtomicBool>) -> Result<Stats> {
         let mut stats = Stats::new();
         info!("开始收集邮件文件...");
         let files = self.collect_email_files()?;
@@ -48,15 +49,138 @@ impl Mailer {
         match self.config.processes() {
             crate::config::ProcessMode::Auto => {
                 info!("使用自动并发模式");
-                self.send_auto_mode(files, &mut stats).await?;
+                self.send_auto_mode_with_cancel(files, &mut stats, running).await?;
             }
             crate::config::ProcessMode::Fixed(n) => {
                 info!("使用固定并发模式: {} 个进程", n);
-                self.send_fixed_mode(files, n, &mut stats).await?;
+                self.send_fixed_mode_with_cancel(files, n, &mut stats, running).await?;
             }
         }
         
         Ok(stats)
+    }
+
+    async fn send_auto_mode_with_cancel(&self, files: Vec<String>, stats: &mut Stats, running: Arc<AtomicBool>) -> Result<()> {
+        let start = Instant::now();
+        let num_cpus = num_cpus::get();
+        let chunk_size = (files.len() + num_cpus - 1) / num_cpus;
+        
+        let mut handles = vec![];
+        for (i, chunk) in files.chunks(chunk_size).enumerate() {
+            let chunk = chunk.to_vec();
+            let config = self.config.clone();
+            let running = running.clone();
+            
+            let handle = task::spawn(async move {
+                let mut group_stats = (0, Duration::default(), Duration::default());
+                for (j, file) in chunk.iter().enumerate() {
+                    if !running.load(Ordering::SeqCst) {
+                        warn!("进程组 {} 收到中断信号，正在退出...", i + 1);
+                        break;
+                    }
+                    
+                    info!("进程组 {} 开始发送文件 {}/{}: {}", i + 1, j + 1, chunk.len(), file);
+                    match Self::send_single_email(&config, file).await {
+                        Ok((parse_duration, send_duration)) => {
+                            info!("进程组 {} 文件 {} 发送成功，用时: {:.2}秒", 
+                                i + 1, j + 1, send_duration.as_secs_f64());
+                            group_stats.0 += 1;
+                            group_stats.1 += parse_duration;
+                            group_stats.2 += send_duration;
+                        }
+                        Err(e) => {
+                            error!("进程组 {} 文件 {} 发送失败: {}", i + 1, j + 1, e);
+                        }
+                    }
+                }
+                info!("进程组 {} 完成", i + 1);
+                group_stats
+            });
+            handles.push(handle);
+        }
+
+        let mut total_sent = 0;
+        let mut total_parse_duration = Duration::default();
+        let mut total_send_duration = Duration::default();
+
+        for handle in handles {
+            if let Ok((sent, parse_duration, send_duration)) = handle.await {
+                total_sent += sent;
+                total_parse_duration += parse_duration;
+                total_send_duration += send_duration;
+            }
+        }
+
+        stats.email_count = total_sent;
+        stats.parse_durations = vec![total_parse_duration];
+        stats.send_durations = vec![total_send_duration];
+        stats.total_duration = start.elapsed();
+
+        Ok(())
+    }
+
+    async fn send_fixed_mode_with_cancel(
+        &self,
+        files: Vec<String>,
+        num_processes: usize,
+        stats: &mut Stats,
+        running: Arc<AtomicBool>,
+    ) -> Result<()> {
+        let start = Instant::now();
+        let chunk_size = (files.len() + num_processes - 1) / num_processes;
+        
+        let mut handles = vec![];
+        for (i, chunk) in files.chunks(chunk_size).enumerate() {
+            let chunk = chunk.to_vec();
+            let config = self.config.clone();
+            let running = running.clone();
+            
+            let handle = task::spawn(async move {
+                let mut group_stats = (0, Duration::default(), Duration::default());
+                for (j, file) in chunk.iter().enumerate() {
+                    if !running.load(Ordering::SeqCst) {
+                        warn!("进程组 {} 收到中断信号，正在退出...", i + 1);
+                        break;
+                    }
+                    
+                    info!("进程组 {} 开始发送文件 {}/{}: {}", i + 1, j + 1, chunk.len(), file);
+                    match Self::send_single_email(&config, file).await {
+                        Ok((parse_duration, send_duration)) => {
+                            info!("进程组 {} 文件 {} 发送成功，用时: {:.2}秒", 
+                                i + 1, j + 1, send_duration.as_secs_f64());
+                            group_stats.0 += 1;
+                            group_stats.1 += parse_duration;
+                            group_stats.2 += send_duration;
+                        }
+                        Err(e) => {
+                            error!("进程组 {} 文件 {} 发送失败: {}", i + 1, j + 1, e);
+                        }
+                    }
+                }
+                info!("进程组 {} 完成", i + 1);
+                group_stats
+            });
+            handles.push(handle);
+        }
+
+        let mut total_sent = 0;
+        let mut total_parse_duration = Duration::default();
+        let mut total_send_duration = Duration::default();
+
+        for handle in handles {
+            if let Ok((sent, parse_duration, send_duration)) = handle.await {
+                total_sent += sent;
+                total_parse_duration += parse_duration;
+                total_send_duration += send_duration;
+            }
+        }
+
+        stats.email_count = total_sent;
+        stats.parse_durations = vec![total_parse_duration];
+        stats.send_durations = vec![total_send_duration];
+        stats.total_duration = start.elapsed();
+
+        Ok(())
     }
 
     async fn test_smtp_connection(config: &Config) -> Result<()> {
@@ -100,103 +224,6 @@ impl Mailer {
             }
         }
         Ok(files)
-    }
-
-    async fn send_auto_mode(&self, files: Vec<String>, stats: &mut Stats) -> Result<()> {
-        let mut handles = Vec::new();
-        let start_time = Instant::now();
-        
-        for (index, file) in files.iter().enumerate() {
-            let config = self.config.clone();
-            let file = file.clone();
-            info!("创建任务 {}/{}: {}", index + 1, files.len(), file);
-            let handle = task::spawn(async move {
-                Self::send_single_email(&config, &file).await
-            });
-            handles.push(handle);
-        }
-
-        for (index, handle) in handles.into_iter().enumerate() {
-            match handle.await {
-                Ok(result) => {
-                    match result {
-                        Ok((parse_duration, send_duration)) => {
-                            info!("任务 {} 完成，用时: {:.2}秒", index + 1, send_duration.as_secs_f64());
-                            stats.add_parse_duration(parse_duration);
-                            stats.add_send_duration(send_duration);
-                            stats.increment_count();
-                        }
-                        Err(e) => {
-                            error!("任务 {} 发送失败: {}", index + 1, e);
-                        }
-                    }
-                }
-                Err(e) => {
-                    error!("任务 {} 执行失败: {}", index + 1, e);
-                }
-            }
-        }
-
-        stats.set_total_duration(start_time.elapsed());
-        Ok(())
-    }
-
-    async fn send_fixed_mode(
-        &self,
-        files: Vec<String>,
-        num_processes: usize,
-        stats: &mut Stats,
-    ) -> Result<()> {
-        let chunk_size = (files.len() + num_processes - 1) / num_processes;
-        let mut handles = Vec::new();
-        let start_time = Instant::now();
-
-        for (chunk_index, chunk) in files.chunks(chunk_size).enumerate() {
-            let chunk_files = chunk.to_vec();
-            let config = self.config.clone();
-            info!("创建进程组 {}/{}, 包含 {} 个文件", chunk_index + 1, num_processes, chunk_files.len());
-            let handle = task::spawn(async move {
-                let mut results = Vec::new();
-                for (file_index, file) in chunk_files.iter().enumerate() {
-                    info!("进程组 {} 开始发送文件 {}/{}: {}", chunk_index + 1, file_index + 1, chunk_files.len(), file);
-                    match Self::send_single_email(&config, file).await {
-                        Ok((parse_duration, send_duration)) => {
-                            info!("进程组 {} 文件 {} 发送成功，用时: {:.2}秒", chunk_index + 1, file_index + 1, send_duration.as_secs_f64());
-                            results.push((true, parse_duration, send_duration));
-                        }
-                        Err(e) => {
-                            error!("进程组 {} 文件 {} 发送失败: {}", chunk_index + 1, file_index + 1, e);
-                            results.push((false, Duration::from_secs(0), Duration::from_secs(0)));
-                        }
-                    }
-                }
-                results
-            });
-            handles.push(handle);
-        }
-
-        for (chunk_index, handle) in handles.into_iter().enumerate() {
-            match handle.await {
-                Ok(durations) => {
-                    info!("进程组 {} 完成", chunk_index + 1);
-                    for (success, parse_duration, send_duration) in durations {
-                        if success {
-                            stats.add_parse_duration(parse_duration);
-                            stats.add_send_duration(send_duration);
-                            stats.increment_count();
-                        } else {
-                            stats.increment_parse_error();
-                        }
-                    }
-                }
-                Err(e) => {
-                    error!("进程组 {} 执行失败: {}", chunk_index + 1, e);
-                }
-            }
-        }
-
-        stats.set_total_duration(start_time.elapsed());
-        Ok(())
     }
 
     async fn send_single_email(config: &Config, file_path: &str) -> Result<(Duration, Duration)> {
