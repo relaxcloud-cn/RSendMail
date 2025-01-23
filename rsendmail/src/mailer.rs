@@ -119,7 +119,7 @@ impl Mailer {
             let running = running.clone();
             
             let handle = task::spawn(async move {
-                let mut group_stats = (0, Duration::default(), Duration::default(), Vec::new());
+                let mut group_stats = (0, Vec::new(), Vec::new(), Vec::new());
                 let mut current_batch = Vec::new();
                 let mut client_opt = None;
 
@@ -169,8 +169,8 @@ impl Mailer {
                                 Ok(results) => {
                                     for (parse_duration, send_duration) in results {
                                         group_stats.0 += 1;
-                                        group_stats.1 += parse_duration;
-                                        group_stats.2 += send_duration;
+                                        group_stats.1.push(parse_duration);
+                                        group_stats.2.push(send_duration);
                                     }
                                 }
                                 Err(e) => {
@@ -193,14 +193,11 @@ impl Mailer {
         }
 
         let mut total_sent = 0;
-        let mut total_parse_duration = Duration::default();
-        let mut total_send_duration = Duration::default();
-
         for handle in handles {
-            if let Ok((sent, parse_duration, send_duration, errors)) = handle.await {
+            if let Ok((sent, parse_durations, send_durations, errors)) = handle.await {
                 total_sent += sent;
-                total_parse_duration += parse_duration;
-                total_send_duration += send_duration;
+                stats.parse_durations.extend(parse_durations);
+                stats.send_durations.extend(send_durations);
                 for error_type in errors {
                     stats.increment_error(&error_type);
                 }
@@ -208,8 +205,6 @@ impl Mailer {
         }
 
         stats.email_count = total_sent;
-        stats.parse_durations = vec![total_parse_duration];
-        stats.send_durations = vec![total_send_duration];
         stats.total_duration = start.elapsed();
 
         Ok(())
