@@ -8,6 +8,7 @@ Used for batch sending emails for testing
 - Support for custom SMTP server configuration
 - Detailed logging and statistics
 - Docker support for easy deployment
+- Support for batch sending in single SMTP session
 
 ## Building
 
@@ -26,31 +27,33 @@ docker build -t rsendmail .
 
 ### Local Usage
 ```bash
-rsendmail -s <smtp_server> -P <port> -f <from_addr> -t <to_addr> -d <email_dir> -p <parallel>
+rsendmail --smtp-server <smtp_server> --port <port> --from <from_addr> --to <to_addr> --dir <email_dir> --processes <processes> --batch-size <batch_size>
 ```
 
 ### Docker Usage
 ```bash
-docker run --rm -v /path/to/emails:/data rsendmail -s <smtp_server> -P <port> -f <from_addr> -t <to_addr> -d /data -p <parallel>
+docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp_server> --port <port> --from <from_addr> --to <to_addr> --dir /data --processes <processes> --batch-size <batch_size>
 ```
 
 ### Parameters
 
-- `-s, --smtp`: SMTP server address
-- `-P, --port`: SMTP server port
-- `-f, --from`: From email address
-- `-t, --to`: To email address
-- `-d, --dir`: Directory containing email files (.eml)
-- `-p, --parallel`: Number of parallel processes (default: 10)
+- `--smtp-server`: SMTP server address
+- `--port`: SMTP server port (default: 25)
+- `--from`: From email address
+- `--to`: To email address
+- `--dir`: Directory containing email files
+- `--extension`: Email file extension (default: eml)
+- `--processes`: Number of parallel processes (use "auto" for automatic setting based on CPU cores, or specify a number)
+- `--batch-size`: Number of emails to send in a single SMTP session (default: 1)
 
 ## Example
 
 ```bash
 # Local example
-rsendmail -s 192.168.1.100 -P 25 -f sender@example.com -t recipient@example.com -d ./emails -p 10
+rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to recipient@example.com --dir ./emails --processes 10 --batch-size 5
 
 # Docker example
-docker run --rm -v $(pwd)/emails:/data rsendmail -s 192.168.1.100 -P 25 -f sender@example.com -t recipient@example.com -d /data -p 10
+docker run --rm -v $(pwd)/emails:/data rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to recipient@example.com --dir /data --processes 10 --batch-size 5
 ```
 
 ## Docker Container
@@ -74,6 +77,7 @@ The Docker container is designed with security and efficiency in mind:
 - Efficient memory usage
 - Fast email parsing and sending
 - Detailed performance statistics output
+- Support for batch sending in single SMTP session for improved efficiency
 
 ## Security
 

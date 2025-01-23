@@ -1,4 +1,5 @@
 use std::time::Duration;
+use std::collections::HashMap;
 
 #[derive(Default)]
 pub struct Stats {
@@ -8,6 +9,7 @@ pub struct Stats {
     pub total_duration: Duration,
     pub parse_errors: usize,
     pub send_errors: usize,
+    pub error_details: HashMap<String, usize>,
 }
 
 impl Stats {
@@ -19,6 +21,7 @@ impl Stats {
             total_duration: Duration::from_secs(0),
             parse_errors: 0,
             send_errors: 0,
+            error_details: HashMap::new(),
         }
     }
 
@@ -43,6 +46,11 @@ impl Stats {
     }
 
     pub fn increment_send_error(&mut self) {
+        self.send_errors += 1;
+    }
+
+    pub fn increment_error(&mut self, error_type: &str) {
+        *self.error_details.entry(error_type.to_string()).or_insert(0) += 1;
         self.send_errors += 1;
     }
 

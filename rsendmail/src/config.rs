@@ -7,46 +7,49 @@ pub enum ProcessMode {
 }
 
 #[derive(Parser, Debug, Clone)]
-#[command(author, version, about, long_about = None)]
+#[command(author, version, about)]
 pub struct Config {
     /// SMTP服务器地址
-    #[arg(short = 's', long)]
+    #[arg(long)]
     pub smtp_server: String,
 
     /// SMTP服务器端口
-    #[arg(short = 'P', long, default_value_t = 25)]
+    #[arg(long, default_value_t = 25)]
     pub port: u16,
 
     /// 发件人邮箱
-    #[arg(short = 'f', long)]
+    #[arg(long)]
     pub from: String,
 
     /// 收件人邮箱
-    #[arg(short = 't', long)]
+    #[arg(long)]
     pub to: String,
 
-    /// 邮件文件目录
-    #[arg(short = 'd', long)]
+    /// 邮件文件所在目录
+    #[arg(long)]
     pub dir: String,
 
     /// 邮件文件扩展名
-    #[arg(short = 'e', long, default_value = "eml")]
+    #[arg(long, default_value = "eml")]
     pub extension: String,
 
-    /// 并发进程数，使用 "auto" 自动设置
-    #[arg(short = 'p', long, default_value = "auto")]
-    processes_str: String,
+    /// 进程数，auto表示自动设置，或者指定具体数字
+    #[arg(long, default_value = "auto")]
+    pub processes: String,
+
+    /// 每个SMTP会话连续发送的邮件数量
+    #[arg(long, default_value_t = 1)]
+    pub batch_size: usize,
 }
 
 impl Config {
-    pub fn processes(&self) -> ProcessMode {
-        if self.processes_str == "auto" {
-            ProcessMode::Auto
-        } else {
-            match self.processes_str.parse() {
-                Ok(n) => ProcessMode::Fixed(n),
+    pub fn process_mode(&self) -> ProcessMode {
+        match self.processes.as_str() {
+            "auto" => ProcessMode::Auto,
+            n => match n.parse::<usize>() {
+                Ok(num) => ProcessMode::Fixed(num),
                 Err(_) => ProcessMode::Auto,
-            }
+            },
         }
     }
 }

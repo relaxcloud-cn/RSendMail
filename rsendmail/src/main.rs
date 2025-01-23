@@ -35,25 +35,27 @@ async fn main() -> anyhow::Result<()> {
     // 发送邮件并获取统计信息
     match mailer.send_all_with_cancel(running).await {
         Ok(stats) => {
-            info!(
-                "邮件发送完成！\n\
-                总计处理: {} 封邮件\n\
-                成功发送: {} 封\n\
-                解析失败: {} 封\n\
-                发送失败: {} 封\n\
-                实际总用时: {:.2}秒\n\
-                邮件解析总用时: {:.2}秒，平均每封: {:.2}秒\n\
-                邮件发送总用时: {:.2}秒，平均每封: {:.2}秒",
-                stats.email_count + stats.parse_errors + stats.send_errors,
-                stats.email_count,
-                stats.parse_errors,
-                stats.send_errors,
-                stats.total_duration.as_secs_f64(),
+            info!("邮件发送完成！");
+            info!("    总计处理: {} 封邮件", stats.email_count + stats.send_errors);
+            info!("    成功发送: {} 封", stats.email_count);
+            info!("    解析失败: {} 封", stats.parse_errors);
+            info!("    发送失败: {} 封", stats.send_errors);
+            
+            // 输出详细的错误统计
+            if stats.send_errors > 0 {
+                info!("    发送失败详情:");
+                for (error_type, count) in stats.error_details.iter() {
+                    info!("        {}: {} 封", error_type, count);
+                }
+            }
+            
+            info!("    实际总用时: {:.2}秒", stats.total_duration.as_secs_f64());
+            info!("    邮件解析总用时: {:.2}秒，平均每封: {:.2}秒",
                 stats.total_parse_duration().as_secs_f64(),
-                stats.average_parse_duration().as_secs_f64(),
+                stats.average_parse_duration().as_secs_f64());
+            info!("    邮件发送总用时: {:.2}秒，平均每封: {:.2}秒",
                 stats.total_send_duration().as_secs_f64(),
-                stats.average_send_duration().as_secs_f64(),
-            );
+                stats.average_send_duration().as_secs_f64());
         }
         Err(e) => {
             error!("邮件发送失败: {}", e);
