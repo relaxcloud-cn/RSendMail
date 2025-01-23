@@ -44,10 +44,11 @@ docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp服务器>
 - `--port`: SMTP 服务器端口（默认：25）
 - `--from`: 发件人邮箱地址
 - `--to`: 收件人邮箱地址
-- `--dir`: 包含邮件文件的目录
+- `--dir`: 邮件文件所在目录
 - `--extension`: 邮件文件扩展名（默认：eml）
-- `--processes`: 并行处理的进程数（使用 "auto" 自动设置为 CPU 核心数，或指定具体数字）
-- `--batch-size`: 单个 SMTP 会话中发送的邮件数量（默认：1）
+- `--processes`: 进程数，auto表示自动设置为CPU核心数，或者指定具体数字（默认：auto）
+- `--batch-size`: 每个SMTP会话连续发送的邮件数量（默认：1）
+- `--smtp-timeout`: SMTP会话超时时间（秒）（默认：30）
 
 ## 使用示例
 

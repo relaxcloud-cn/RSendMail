@@ -41,12 +41,13 @@ docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp_server> -
 
 - `--smtp-server`: SMTP server address
 - `--port`: SMTP server port (default: 25)
-- `--from`: From email address
-- `--to`: To email address
-- `--dir`: Directory containing email files
+- `--from`: Sender email address
+- `--to`: Recipient email address
+- `--dir`: Email files directory
 - `--extension`: Email file extension (default: eml)
-- `--processes`: Number of parallel processes (use "auto" for automatic setting based on CPU cores, or specify a number)
+- `--processes`: Number of processes, "auto" for CPU core count or specify a number (default: auto)
 - `--batch-size`: Number of emails to send in a single SMTP session (default: 1)
+- `--smtp-timeout`: SMTP session timeout in seconds (default: 30)
 
 ## Example
 

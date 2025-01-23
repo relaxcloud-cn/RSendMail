@@ -139,7 +139,7 @@ impl Mailer {
 
                         // 为每个批次创建新的SMTP客户端
                         info!("连接SMTP服务器: {}:{}", config.smtp_server, config.port);
-                        let client_result = match timeout(Duration::from_secs(10),
+                        let client_result = match timeout(Duration::from_secs(config.smtp_timeout),
                             SmtpClientBuilder::new(config.smtp_server.as_str(), config.port)
                                 .implicit_tls(false)
                                 .allow_invalid_certs()
@@ -206,7 +206,7 @@ impl Mailer {
     }
 
     async fn test_smtp_connection(config: &Config) -> Result<()> {
-        match timeout(Duration::from_secs(10), async {
+        match timeout(Duration::from_secs(config.smtp_timeout), async {
             let mut client = SmtpClientBuilder::new(config.smtp_server.as_str(), config.port)
                 .implicit_tls(false)
                 .allow_invalid_certs()  // 允许自签名证书
@@ -269,7 +269,7 @@ impl Mailer {
 
         info!("连接SMTP服务器: {}:{}", config.smtp_server, config.port);
         let send_start = Instant::now();
-        let mut client = match timeout(Duration::from_secs(10), 
+        let mut client = match timeout(Duration::from_secs(config.smtp_timeout), 
             SmtpClientBuilder::new(config.smtp_server.as_str(), config.port)
                 .implicit_tls(false)
                 .allow_invalid_certs()
@@ -297,7 +297,7 @@ impl Mailer {
         };
 
         info!("发送邮件...");
-        match timeout(Duration::from_secs(30), client.send(builder)).await {
+        match timeout(Duration::from_secs(config.smtp_timeout), client.send(builder)).await {
             Ok(result) => match result {
                 Ok(_) => {
                     info!("邮件发送成功！");
@@ -351,7 +351,7 @@ impl Mailer {
 
             info!("发送邮件...");
             let send_start = Instant::now();
-            match timeout(Duration::from_secs(30), client.send(builder)).await {
+            match timeout(Duration::from_secs(config.smtp_timeout), client.send(builder)).await {
                 Ok(result) => match result {
                     Ok(_) => {
                         info!("邮件发送成功！");

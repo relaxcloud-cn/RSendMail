@@ -1,13 +1,8 @@
 use clap::Parser;
 
-#[derive(Debug, Clone)]
-pub enum ProcessMode {
-    Auto,
-    Fixed(usize),
-}
-
+/// A high-performance bulk email sending CLI tool
 #[derive(Parser, Debug, Clone)]
-#[command(author, version, about)]
+#[command(author, version, about, long_about = None)]
 pub struct Config {
     /// SMTP服务器地址
     #[arg(long)]
@@ -17,11 +12,11 @@ pub struct Config {
     #[arg(long, default_value_t = 25)]
     pub port: u16,
 
-    /// 发件人邮箱
+    /// 发件人邮箱地址
     #[arg(long)]
     pub from: String,
 
-    /// 收件人邮箱
+    /// 收件人邮箱地址
     #[arg(long)]
     pub to: String,
 
@@ -33,23 +28,34 @@ pub struct Config {
     #[arg(long, default_value = "eml")]
     pub extension: String,
 
-    /// 进程数，auto表示自动设置，或者指定具体数字
+    /// 进程数，auto表示自动设置为CPU核心数，或者指定具体数字
     #[arg(long, default_value = "auto")]
     pub processes: String,
 
     /// 每个SMTP会话连续发送的邮件数量
     #[arg(long, default_value_t = 1)]
     pub batch_size: usize,
+
+    /// SMTP会话超时时间（秒）
+    #[arg(long, default_value_t = 30)]
+    pub smtp_timeout: u64,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ProcessMode {
+    Auto,
+    Fixed(usize),
 }
 
 impl Config {
     pub fn process_mode(&self) -> ProcessMode {
-        match self.processes.as_str() {
-            "auto" => ProcessMode::Auto,
-            n => match n.parse::<usize>() {
-                Ok(num) => ProcessMode::Fixed(num),
+        if self.processes == "auto" {
+            ProcessMode::Auto
+        } else {
+            match self.processes.parse::<usize>() {
+                Ok(n) => ProcessMode::Fixed(n),
                 Err(_) => ProcessMode::Auto,
-            },
+            }
         }
     }
 }
