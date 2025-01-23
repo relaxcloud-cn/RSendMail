@@ -1,5 +1,6 @@
 use std::time::Duration;
 use std::collections::HashMap;
+use std::fmt;
 
 #[derive(Default)]
 pub struct Stats {
@@ -54,29 +55,51 @@ impl Stats {
         self.send_errors += 1;
     }
 
-    pub fn average_parse_duration(&self) -> Duration {
-        if self.parse_durations.is_empty() {
-            Duration::default()
+    fn calculate_qps(&self, count: usize, duration: Duration) -> f64 {
+        if duration.as_secs_f64() > 0.0 {
+            count as f64 / duration.as_secs_f64()
         } else {
-            let total: Duration = self.parse_durations.iter().sum();
-            total / self.parse_durations.len() as u32
+            0.0
         }
     }
+}
 
-    pub fn average_send_duration(&self) -> Duration {
-        if self.send_durations.is_empty() {
-            Duration::default()
-        } else {
-            let total: Duration = self.send_durations.iter().sum();
-            total / self.send_durations.len() as u32
+impl fmt::Display for Stats {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "    总计处理: {} 封邮件", self.email_count)?;
+        writeln!(f, "    成功发送: {} 封", self.email_count - self.send_errors - self.parse_errors)?;
+        writeln!(f, "    解析失败: {} 封", self.parse_errors)?;
+        writeln!(f, "    发送失败: {} 封", self.send_errors)?;
+        
+        if !self.error_details.is_empty() {
+            writeln!(f, "    发送失败详情:")?;
+            for (error_type, count) in &self.error_details {
+                writeln!(f, "        {}: {} 封", error_type, count)?;
+            }
         }
-    }
 
-    pub fn total_parse_duration(&self) -> Duration {
-        self.parse_durations.iter().sum()
-    }
+        
+        // 计算总的解析和发送时间
+        let total_parse_duration: Duration = self.parse_durations.iter().sum();
+        let total_send_duration: Duration = self.send_durations.iter().sum();
+        
+        // 计算解析QPS
+        let parse_qps = self.calculate_qps(self.email_count, total_parse_duration);
+        writeln!(f, "    邮件解析总耗时: {:.2}秒（所有进程总和），QPS: {:.2}封/秒", 
+            total_parse_duration.as_secs_f64(),
+            parse_qps)?;
 
-    pub fn total_send_duration(&self) -> Duration {
-        self.send_durations.iter().sum()
+        // 计算发送QPS
+        let send_qps = self.calculate_qps(self.email_count, total_send_duration);
+        writeln!(f, "    邮件发送总耗时: {:.2}秒（所有进程总和），QPS: {:.2}封/秒",
+            total_send_duration.as_secs_f64(),
+            send_qps)?;
+
+        // 计算实际总用时
+        let total_secs = self.total_duration.as_secs_f64();
+        let actual_qps = self.calculate_qps(self.email_count, self.total_duration);
+        writeln!(f, "    实际总用时: {:.2}秒, QPS: {:.2}封/秒", total_secs, actual_qps)?;
+
+        Ok(())
     }
 }

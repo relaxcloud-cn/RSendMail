@@ -121,7 +121,6 @@ impl Mailer {
             let handle = task::spawn(async move {
                 let mut group_stats = (0, Vec::new(), Vec::new(), Vec::new());
                 let mut current_batch = Vec::new();
-                let mut client_opt = None;
 
                 for (j, file) in chunk.iter().enumerate() {
                     if !running.load(Ordering::SeqCst) {
@@ -138,47 +137,43 @@ impl Mailer {
                             (chunk.len() + config.batch_size - 1) / config.batch_size,
                             current_batch.len());
 
-                        // 如果还没有创建SMTP客户端，创建一个新的
-                        if client_opt.is_none() {
-                            info!("连接SMTP服务器: {}:{}", config.smtp_server, config.port);
-                            client_opt = match timeout(Duration::from_secs(10),
-                                SmtpClientBuilder::new(config.smtp_server.as_str(), config.port)
-                                    .implicit_tls(false)
-                                    .allow_invalid_certs()
-                                    .connect()
-                            ).await {
-                                Ok(result) => match result {
-                                    Ok(client) => Some(client),
-                                    Err(e) => {
-                                        error!("SMTP连接失败: {}", e);
-                                        group_stats.3.push("SMTP连接失败".to_string());
-                                        break;
-                                    }
-                                },
-                                Err(_) => {
-                                    error!("SMTP连接超时");
-                                    group_stats.3.push("SMTP连接超时".to_string());
-                                    break;
-                                }
-                            };
-                        }
+                        // 为每个批次创建新的SMTP客户端
+                        info!("连接SMTP服务器: {}:{}", config.smtp_server, config.port);
+                        let client_result = match timeout(Duration::from_secs(10),
+                            SmtpClientBuilder::new(config.smtp_server.as_str(), config.port)
+                                .implicit_tls(false)
+                                .allow_invalid_certs()
+                                .connect()
+                        ).await {
+                            Ok(result) => result,
+                            Err(_) => {
+                                error!("SMTP连接超时");
+                                group_stats.3.push("SMTP连接超时".to_string());
+                                current_batch.clear();
+                                continue;
+                            }
+                        };
 
                         // 发送这一批邮件
-                        if let Some(client) = client_opt.as_mut() {
-                            match Self::send_batch_emails(&config, &current_batch, client).await {
-                                Ok(results) => {
-                                    for (parse_duration, send_duration) in results {
-                                        group_stats.0 += 1;
-                                        group_stats.1.push(parse_duration);
-                                        group_stats.2.push(send_duration);
+                        match client_result {
+                            Ok(mut client) => {
+                                match Self::send_batch_emails(&config, &current_batch, &mut client).await {
+                                    Ok(results) => {
+                                        for (parse_duration, send_duration) in results {
+                                            group_stats.0 += 1;
+                                            group_stats.1.push(parse_duration);
+                                            group_stats.2.push(send_duration);
+                                        }
+                                    }
+                                    Err(e) => {
+                                        error!("批量发送失败: {}", e);
+                                        group_stats.3.push(e.to_string());
                                     }
                                 }
-                                Err(e) => {
-                                    error!("批量发送失败: {}", e);
-                                    group_stats.3.push(e.to_string());
-                                    // 发送失败时关闭连接并重新创建
-                                    client_opt = None;
-                                }
+                            }
+                            Err(e) => {
+                                error!("SMTP连接失败: {}", e);
+                                group_stats.3.push("SMTP连接失败".to_string());
                             }
                         }
 
