@@ -1,6 +1,8 @@
 # RSendMail
 Used for batch sending emails for testing
 
+English | [简体中文](README_zh.md)
+
 ## Features
 
 - Batch process and send multiple emails
