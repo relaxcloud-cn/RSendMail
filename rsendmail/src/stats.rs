@@ -11,6 +11,7 @@ pub struct Stats {
     pub parse_errors: usize,
     pub send_errors: usize,
     pub error_details: HashMap<String, usize>,
+    pub failed_files: HashMap<String, Vec<String>>,
 }
 
 impl Stats {
@@ -23,6 +24,7 @@ impl Stats {
             parse_errors: 0,
             send_errors: 0,
             error_details: HashMap::new(),
+            failed_files: HashMap::new(),
         }
     }
 
@@ -50,8 +52,11 @@ impl Stats {
         self.send_errors += 1;
     }
 
-    pub fn increment_error(&mut self, error_type: &str) {
+    pub fn increment_error(&mut self, error_type: &str, file_path: &str) {
         *self.error_details.entry(error_type.to_string()).or_insert(0) += 1;
+        self.failed_files.entry(error_type.to_string())
+            .or_insert_with(Vec::new)
+            .push(file_path.to_string());
         self.send_errors += 1;
     }
 
@@ -75,10 +80,14 @@ impl fmt::Display for Stats {
             writeln!(f, "    发送失败详情:")?;
             for (error_type, count) in &self.error_details {
                 writeln!(f, "        {}: {} 封", error_type, count)?;
+                if let Some(files) = self.failed_files.get(error_type) {
+                    for file in files {
+                        writeln!(f, "            - {}", file)?;
+                    }
+                }
             }
         }
 
-        
         // 计算总的解析和发送时间
         let total_parse_duration: Duration = self.parse_durations.iter().sum();
         let total_send_duration: Duration = self.send_durations.iter().sum();

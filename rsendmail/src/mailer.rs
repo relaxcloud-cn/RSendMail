@@ -55,7 +55,7 @@ impl Mailer {
             let running = running.clone();
             
             let handle = task::spawn(async move {
-                let mut group_stats = (0, Duration::default(), Duration::default());
+                let mut group_stats = (0, Duration::default(), Duration::default(), Vec::new());
                 for (j, file) in chunk.iter().enumerate() {
                     if !running.load(Ordering::SeqCst) {
                         warn!("进程组 {} 收到中断信号，正在退出...", i + 1);
@@ -73,6 +73,7 @@ impl Mailer {
                         }
                         Err(e) => {
                             error!("进程组 {} 文件 {} 发送失败: {}", i + 1, j + 1, e);
+                            group_stats.3.push((e.to_string(), file.clone()));
                         }
                     }
                 }
@@ -87,10 +88,13 @@ impl Mailer {
         let mut total_send_duration = Duration::default();
 
         for handle in handles {
-            if let Ok((sent, parse_duration, send_duration)) = handle.await {
+            if let Ok((sent, parse_duration, send_duration, errors)) = handle.await {
                 total_sent += sent;
                 total_parse_duration += parse_duration;
                 total_send_duration += send_duration;
+                for (error_type, file_path) in errors {
+                    stats.increment_error(&error_type, &file_path);
+                }
             }
         }
 
@@ -130,14 +134,12 @@ impl Mailer {
 
                     current_batch.push(file.clone());
                     
-                    // 当达到批处理大小或是最后一个文件时，发送这一批邮件
                     if current_batch.len() >= config.batch_size || j == chunk.len() - 1 {
                         info!("进程组 {} 开始发送第 {}/{} 批，包含 {} 封邮件", 
                             i + 1, j / config.batch_size + 1, 
                             (chunk.len() + config.batch_size - 1) / config.batch_size,
                             current_batch.len());
 
-                        // 为每个批次创建新的SMTP客户端
                         info!("连接SMTP服务器: {}:{}", config.smtp_server, config.port);
                         let client_result = match timeout(Duration::from_secs(config.smtp_timeout),
                             SmtpClientBuilder::new(config.smtp_server.as_str(), config.port)
@@ -148,13 +150,14 @@ impl Mailer {
                             Ok(result) => result,
                             Err(_) => {
                                 error!("SMTP连接超时");
-                                group_stats.3.push("SMTP连接超时".to_string());
+                                for file in &current_batch {
+                                    group_stats.3.push(("SMTP连接超时".to_string(), file.clone()));
+                                }
                                 current_batch.clear();
                                 continue;
                             }
                         };
 
-                        // 发送这一批邮件
                         match client_result {
                             Ok(mut client) => {
                                 match Self::send_batch_emails(&config, &current_batch, &mut client).await {
@@ -167,13 +170,17 @@ impl Mailer {
                                     }
                                     Err(e) => {
                                         error!("批量发送失败: {}", e);
-                                        group_stats.3.push(e.to_string());
+                                        for file in &current_batch {
+                                            group_stats.3.push((e.to_string(), file.clone()));
+                                        }
                                     }
                                 }
                             }
                             Err(e) => {
                                 error!("SMTP连接失败: {}", e);
-                                group_stats.3.push("SMTP连接失败".to_string());
+                                for file in &current_batch {
+                                    group_stats.3.push(("SMTP连接失败".to_string(), file.clone()));
+                                }
                             }
                         }
 
@@ -193,8 +200,8 @@ impl Mailer {
                 total_sent += sent;
                 stats.parse_durations.extend(parse_durations);
                 stats.send_durations.extend(send_durations);
-                for error_type in errors {
-                    stats.increment_error(&error_type);
+                for (error_type, file_path) in errors {
+                    stats.increment_error(&error_type, &file_path);
                 }
             }
         }
@@ -251,10 +258,10 @@ impl Mailer {
     async fn send_single_email(config: &Config, file_path: &str) -> Result<(Duration, Duration)> {
         info!("开始读取文件: {}", file_path);
         let parse_start = Instant::now();
-        let content = fs::read_to_string(file_path)?;
+        let content = fs::read(file_path)?;
         
         info!("解析邮件内容");
-        let message = match MessageParser::default().parse(content.as_bytes()) {
+        let message = match MessageParser::default().parse(&content) {
             Some(msg) => msg,
             None => {
                 error!("无法解析邮件文件: {}", file_path);
@@ -319,10 +326,10 @@ impl Mailer {
         for file_path in files {
             info!("开始读取文件: {}", file_path);
             let parse_start = Instant::now();
-            let content = fs::read_to_string(file_path)?;
+            let content = fs::read(file_path)?;
             
             info!("解析邮件内容");
-            let message = match MessageParser::default().parse(content.as_bytes()) {
+            let message = match MessageParser::default().parse(&content) {
                 Some(msg) => msg,
                 None => {
                     error!("无法解析邮件文件: {}", file_path);
