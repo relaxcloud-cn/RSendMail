@@ -71,18 +71,28 @@ impl Stats {
 
 impl fmt::Display for Stats {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "邮件发送统计报告")?;
+        writeln!(f, "===================")?;
+        writeln!(f, "1. 基本统计")?;
         writeln!(f, "    总计处理: {} 封邮件", self.email_count)?;
         writeln!(f, "    成功发送: {} 封", self.email_count - self.send_errors - self.parse_errors)?;
-        writeln!(f, "    解析失败: {} 封", self.parse_errors)?;
-        writeln!(f, "    发送失败: {} 封", self.send_errors)?;
+        writeln!(f, "    总计失败: {} 封", self.send_errors + self.parse_errors)?;
         
         if !self.error_details.is_empty() {
-            writeln!(f, "    发送失败详情:")?;
-            for (error_type, count) in &self.error_details {
-                writeln!(f, "        {}: {} 封", error_type, count)?;
+            writeln!(f, "\n2. 错误分类统计")?;
+            let mut sorted_errors: Vec<_> = self.error_details.iter().collect();
+            sorted_errors.sort_by(|a, b| b.1.cmp(a.1));
+            
+            for (error_type, count) in sorted_errors {
+                writeln!(f, "    {} - {} 封 ({:.1}%)", 
+                    error_type, 
+                    count, 
+                    (*count as f64 / self.email_count as f64) * 100.0
+                )?;
                 if let Some(files) = self.failed_files.get(error_type) {
+                    writeln!(f, "    失败文件列表:")?;
                     for file in files {
-                        writeln!(f, "            - {}", file)?;
+                        writeln!(f, "        - {}", file)?;
                     }
                 }
             }

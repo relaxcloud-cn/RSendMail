@@ -13,8 +13,14 @@ use std::process;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // 解析命令行参数
+    let config = Config::parse();
+
     // 初始化日志
-    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
+    env_logger::Builder::from_env(Env::default())
+        .filter_level(config.get_log_level())
+        .format_timestamp_millis()
+        .init();
 
     // 创建一个原子布尔值用于控制程序退出
     let running = Arc::new(AtomicBool::new(true));
@@ -26,8 +32,7 @@ async fn main() -> anyhow::Result<()> {
         r.store(false, Ordering::SeqCst);
     })?;
 
-    // 解析命令行参数
-    let config = Config::parse();
+    // 配置已在上面解析
 
     // 创建邮件发送器
     let mailer = Mailer::new(config);

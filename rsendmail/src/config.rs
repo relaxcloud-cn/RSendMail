@@ -1,4 +1,5 @@
 use clap::Parser;
+use log::LevelFilter;
 
 /// A high-performance bulk email sending CLI tool
 #[derive(Parser, Debug, Clone)]
@@ -39,6 +40,10 @@ pub struct Config {
     /// SMTP会话超时时间（秒）
     #[arg(long, default_value_t = 30)]
     pub smtp_timeout: u64,
+
+    /// 日志级别 (error/warn/info/debug/trace)
+    #[arg(long, default_value = "info")]
+    pub log_level: String,
 }
 
 #[derive(Debug, PartialEq)]
@@ -48,6 +53,17 @@ pub enum ProcessMode {
 }
 
 impl Config {
+    pub fn get_log_level(&self) -> LevelFilter {
+        match self.log_level.to_lowercase().as_str() {
+            "error" => LevelFilter::Error,
+            "warn" => LevelFilter::Warn,
+            "info" => LevelFilter::Info,
+            "debug" => LevelFilter::Debug,
+            "trace" => LevelFilter::Trace,
+            _ => LevelFilter::Info,
+        }
+    }
+
     pub fn process_mode(&self) -> ProcessMode {
         if self.processes == "auto" {
             ProcessMode::Auto

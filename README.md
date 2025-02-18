@@ -48,12 +48,17 @@ docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp_server> -
 - `--processes`: Number of processes, "auto" for CPU core count or specify a number (default: auto)
 - `--batch-size`: Number of emails to send in a single SMTP session (default: 1)
 - `--smtp-timeout`: SMTP session timeout in seconds (default: 30)
+- `--log-level`: Log level (error/warn/info/debug/trace) (default: info)
 
 ## Example
 
 ```bash
 # Local example
+# Normal logging (info level)
 rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to recipient@example.com --dir ./emails --processes 10 --batch-size 5
+
+# Detailed debug logging
+rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to recipient@example.com --dir ./emails --processes 10 --batch-size 5 --log-level debug
 
 # Docker example
 docker run --rm -v $(pwd)/emails:/data rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to recipient@example.com --dir /data --processes 10 --batch-size 5

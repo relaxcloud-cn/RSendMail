@@ -72,8 +72,19 @@ impl Mailer {
                             group_stats.2 += send_duration;
                         }
                         Err(e) => {
-                            error!("进程组 {} 文件 {} 发送失败: {}", i + 1, j + 1, e);
-                            group_stats.3.push((e.to_string(), file.clone()));
+                            let error_type = if e.to_string().contains("parse") {
+                                "解析错误"
+                            } else if e.to_string().contains("timeout") {
+                                "连接超时"
+                            } else if e.to_string().contains("authentication") {
+                                "认证失败"
+                            } else if e.to_string().contains("connection refused") {
+                                "连接被拒绝"
+                            } else {
+                                "其他错误"
+                            };
+                            error!("进程组 {} 文件 {} 发送失败 - {}: {}", i + 1, j + 1, error_type, e);
+                            group_stats.3.push((error_type.to_string(), file.clone()));
                         }
                     }
                 }
