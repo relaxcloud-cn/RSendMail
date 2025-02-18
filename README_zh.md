@@ -9,7 +9,8 @@
 - 批量处理和发送多个邮件
 - 多线程处理提升性能
 - 支持自定义 SMTP 服务器配置
-- 详细的日志和统计信息
+- 支持多级日志输出（error/warn/info/debug/trace）
+- 详细的错误跟踪和统计信息
 - Docker 支持便于部署
 - 支持在单个 SMTP 会话中批量发送
 
@@ -49,15 +50,32 @@ docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp服务器>
 - `--processes`: 进程数，auto表示自动设置为CPU核心数，或者指定具体数字（默认：auto）
 - `--batch-size`: 每个SMTP会话连续发送的邮件数量（默认：1）
 - `--smtp-timeout`: SMTP会话超时时间（秒）（默认：30）
+- `--log-level`: 日志级别（error/warn/info/debug/trace）（默认：info）
+
+## 日志级别
+
+应用程序支持不同的日志级别来控制输出的详细程度：
+
+- `error`: 仅显示错误信息
+- `warn`: 显示警告和错误信息
+- `info`: 显示一般进度信息（默认）
+- `debug`: 显示详细的调试信息
+- `trace`: 显示最详细的跟踪信息
 
 ## 使用示例
 
 ```bash
-# 本地运行示例
+# 默认日志级别（info）
 rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to recipient@example.com --dir ./emails --processes 10 --batch-size 5
 
+# 详细调试日志
+rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to recipient@example.com --dir ./emails --processes 10 --batch-size 5 --log-level debug
+
+# 仅显示错误信息
+rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to recipient@example.com --dir ./emails --processes 10 --batch-size 5 --log-level error
+
 # Docker 运行示例
-docker run --rm -v $(pwd)/emails:/data rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to recipient@example.com --dir /data --processes 10 --batch-size 5
+docker run --rm -v $(pwd)/emails:/data rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to recipient@example.com --dir /data --processes 10 --batch-size 5 --log-level info
 ```
 
 ## Docker 容器说明

@@ -8,7 +8,8 @@ English | [简体中文](README_zh.md)
 - Batch process and send multiple emails
 - Multi-threaded processing for improved performance
 - Support for custom SMTP server configuration
-- Detailed logging and statistics
+- Detailed logging with configurable levels (error/warn/info/debug/trace)
+- Comprehensive error tracking and statistics
 - Docker support for easy deployment
 - Support for batch sending in single SMTP session
 
