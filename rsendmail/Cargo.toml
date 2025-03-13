@@ -6,8 +6,8 @@ authors = ["RSendMail Contributors"]
 description = "A high-performance bulk email sending CLI tool"
 
 [dependencies]
-mail-send = "0.4.0"
-mail-parser = "0.9.2"
+mail-send = "0.5.0"
+mail-parser = "0.10.2"
 mail-builder = "0.3.2"
 tokio = { version = "1.35.1", features = ["full"] }
 clap = { version = "4.4.12", features = ["derive"] }

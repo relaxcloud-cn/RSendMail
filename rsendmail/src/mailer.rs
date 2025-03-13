@@ -7,8 +7,7 @@ use tokio::time::timeout;
 use tokio::io::{AsyncRead, AsyncWrite};
 use anyhow::Result;
 use log::{info, warn, error};
-use mail_send::{SmtpClient, SmtpClientBuilder};
-use mail_builder::MessageBuilder;
+use mail_send::{SmtpClient, SmtpClientBuilder, mail_builder::MessageBuilder};
 use mail_parser::MessageParser;
 use walkdir::WalkDir;
 
@@ -43,80 +42,6 @@ impl Mailer {
         Ok(stats)
     }
 
-    async fn send_auto_mode_with_cancel(&self, files: Vec<String>, stats: &mut Stats, running: Arc<AtomicBool>) -> Result<()> {
-        let start = Instant::now();
-        let num_cpus = num_cpus::get();
-        let chunk_size = (files.len() + num_cpus - 1) / num_cpus;
-        
-        let mut handles = vec![];
-        for (i, chunk) in files.chunks(chunk_size).enumerate() {
-            let chunk = chunk.to_vec();
-            let config = self.config.clone();
-            let running = running.clone();
-            
-            let handle = task::spawn(async move {
-                let mut group_stats = (0, Duration::default(), Duration::default(), Vec::new());
-                for (j, file) in chunk.iter().enumerate() {
-                    if !running.load(Ordering::SeqCst) {
-                        warn!("进程组 {} 收到中断信号，正在退出...", i + 1);
-                        break;
-                    }
-                    
-                    info!("进程组 {} 开始发送文件 {}/{}: {}", i + 1, j + 1, chunk.len(), file);
-                    match Self::send_single_email(&config, file).await {
-                        Ok((parse_duration, send_duration)) => {
-                            info!("进程组 {} 文件 {} 发送成功，用时: {:.2}秒", 
-                                i + 1, j + 1, send_duration.as_secs_f64());
-                            group_stats.0 += 1;
-                            group_stats.1 += parse_duration;
-                            group_stats.2 += send_duration;
-                        }
-                        Err(e) => {
-                            let error_type = if e.to_string().contains("parse") {
-                                "解析错误"
-                            } else if e.to_string().contains("timeout") {
-                                "连接超时"
-                            } else if e.to_string().contains("authentication") {
-                                "认证失败"
-                            } else if e.to_string().contains("connection refused") {
-                                "连接被拒绝"
-                            } else {
-                                "其他错误"
-                            };
-                            error!("进程组 {} 文件 {} 发送失败 - {}: {}", i + 1, j + 1, error_type, e);
-                            group_stats.3.push((error_type.to_string(), file.clone()));
-                        }
-                    }
-                }
-                info!("进程组 {} 完成", i + 1);
-                group_stats
-            });
-            handles.push(handle);
-        }
-
-        let mut total_sent = 0;
-        let mut total_parse_duration = Duration::default();
-        let mut total_send_duration = Duration::default();
-
-        for handle in handles {
-            if let Ok((sent, parse_duration, send_duration, errors)) = handle.await {
-                total_sent += sent;
-                total_parse_duration += parse_duration;
-                total_send_duration += send_duration;
-                for (error_type, file_path) in errors {
-                    stats.increment_error(&error_type, &file_path);
-                }
-            }
-        }
-
-        stats.email_count = total_sent;
-        stats.parse_durations = vec![total_parse_duration];
-        stats.send_durations = vec![total_send_duration];
-        stats.total_duration = start.elapsed();
-
-        Ok(())
-    }
-
     async fn send_fixed_mode_with_cancel(
         &self,
         files: Vec<String>,
@@ -136,6 +61,7 @@ impl Mailer {
             let handle = task::spawn(async move {
                 let mut group_stats = (0, Vec::new(), Vec::new(), Vec::new());
                 let mut current_batch = Vec::new();
+                let mut client_opt: Option<SmtpClient<tokio::net::TcpStream>> = None;
 
                 for (j, file) in chunk.iter().enumerate() {
                     if !running.load(Ordering::SeqCst) {
@@ -151,52 +77,66 @@ impl Mailer {
                             (chunk.len() + config.batch_size - 1) / config.batch_size,
                             current_batch.len());
 
-                        info!("连接SMTP服务器: {}:{}", config.smtp_server, config.port);
-                        let client_result = match timeout(Duration::from_secs(config.smtp_timeout),
-                            SmtpClientBuilder::new(config.smtp_server.as_str(), config.port)
-                                .implicit_tls(false)
-                                .allow_invalid_certs()
-                                .connect()
-                        ).await {
-                            Ok(result) => result,
-                            Err(_) => {
-                                error!("SMTP连接超时");
-                                for file in &current_batch {
-                                    group_stats.3.push(("SMTP连接超时".to_string(), file.clone()));
+                        // 如果没有活动连接，创建一个新的
+                        if client_opt.is_none() {
+                            info!("连接SMTP服务器: {}:{}", config.smtp_server, config.port);
+                            let client_result = match timeout(Duration::from_secs(config.smtp_timeout),
+                                SmtpClientBuilder::new(config.smtp_server.as_str(), config.port)
+                                    .connect_plain()
+                            ).await {
+                                Ok(result) => result,
+                                Err(_) => {
+                                    error!("SMTP连接超时");
+                                    for file in &current_batch {
+                                        group_stats.3.push(("SMTP连接超时".to_string(), file.clone()));
+                                    }
+                                    current_batch.clear();
+                                    continue;
                                 }
-                                current_batch.clear();
-                                continue;
-                            }
-                        };
+                            };
 
-                        match client_result {
-                            Ok(mut client) => {
-                                match Self::send_batch_emails(&config, &current_batch, &mut client).await {
-                                    Ok(results) => {
-                                        for (parse_duration, send_duration) in results {
-                                            group_stats.0 += 1;
-                                            group_stats.1.push(parse_duration);
-                                            group_stats.2.push(send_duration);
-                                        }
+                            match client_result {
+                                Ok(client) => {
+                                    client_opt = Some(client);
+                                }
+                                Err(e) => {
+                                    error!("SMTP连接失败: {}", e);
+                                    for file in &current_batch {
+                                        group_stats.3.push(("SMTP连接失败".to_string(), file.clone()));
                                     }
-                                    Err(e) => {
-                                        error!("批量发送失败: {}", e);
-                                        for file in &current_batch {
-                                            group_stats.3.push((e.to_string(), file.clone()));
-                                        }
-                                    }
+                                    current_batch.clear();
+                                    continue;
                                 }
                             }
-                            Err(e) => {
-                                error!("SMTP连接失败: {}", e);
-                                for file in &current_batch {
-                                    group_stats.3.push(("SMTP连接失败".to_string(), file.clone()));
+                        }
+
+                        if let Some(ref mut client) = client_opt {
+                            match Self::send_batch_emails(&config, &current_batch, client).await {
+                                Ok(results) => {
+                                    for (parse_duration, send_duration) in results {
+                                        group_stats.0 += 1;
+                                        group_stats.1.push(parse_duration);
+                                        group_stats.2.push(send_duration);
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("批量发送失败: {}", e);
+                                    for file in &current_batch {
+                                        group_stats.3.push((e.to_string(), file.clone()));
+                                    }
+                                    // 连接可能已经损坏，重置连接
+                                    client_opt = None;
                                 }
                             }
                         }
 
                         current_batch.clear();
                     }
+                }
+                
+                // 关闭SMTP连接
+                if let Some(client) = client_opt {
+                    let _ = client.quit().await;
                 }
                 
                 info!("进程组 {} 完成", i + 1);
@@ -223,108 +163,24 @@ impl Mailer {
         Ok(())
     }
 
-    async fn test_smtp_connection(config: &Config) -> Result<()> {
-        match timeout(Duration::from_secs(config.smtp_timeout), async {
-            let mut client = SmtpClientBuilder::new(config.smtp_server.as_str(), config.port)
-                .implicit_tls(false)
-                .allow_invalid_certs()  // 允许自签名证书
-                .connect()
-                .await?;
-            
-            // 尝试发送NOOP命令
-            client.noop().await?;
-            Ok::<(), anyhow::Error>(())
-        }).await {
-            Ok(result) => result?,
-            Err(_) => return Err(anyhow::anyhow!("SMTP服务器连接超时")),
-        }
-        Ok(())
-    }
-
     fn collect_email_files(&self) -> Result<Vec<String>> {
         let mut files = Vec::new();
         info!("开始扫描目录: {}", self.config.dir);
-        for entry in WalkDir::new(&self.config.dir) {
-            match entry {
-                Ok(entry) => {
-                    if entry.file_type().is_file() {
-                        if let Some(ext) = entry.path().extension() {
-                            if ext.to_string_lossy() == self.config.extension {
-                                if let Some(path) = entry.path().to_str() {
-                                    info!("找到邮件文件: {}", path);
-                                    files.push(path.to_string());
-                                }
-                            }
+        
+        for entry in WalkDir::new(&self.config.dir).into_iter().filter_map(|e| e.ok()) {
+            if entry.file_type().is_file() {
+                if let Some(ext) = entry.path().extension() {
+                    if ext.to_string_lossy() == self.config.extension {
+                        if let Some(path_str) = entry.path().to_str() {
+                            files.push(path_str.to_string());
                         }
                     }
                 }
-                Err(e) => {
-                    error!("扫描目录时出错: {}", e);
-                }
             }
         }
-        Ok(files)
-    }
-
-    async fn send_single_email(config: &Config, file_path: &str) -> Result<(Duration, Duration)> {
-        info!("开始读取文件: {}", file_path);
-        let parse_start = Instant::now();
-        let content = fs::read(file_path)?;
         
-        info!("解析邮件内容");
-        let message = match MessageParser::default().parse(&content) {
-            Some(msg) => msg,
-            None => {
-                error!("无法解析邮件文件: {}", file_path);
-                return Err(anyhow::anyhow!("无法解析邮件文件"));
-            }
-        };
-        let parse_duration = parse_start.elapsed();
-
-        let subject = message.subject().unwrap_or("No Subject").to_string();
-        let text_content = message.body_text(0).unwrap_or_default().to_string();
-        let html_content = message.body_html(0).map(|s| s.to_string());
-
-        info!("连接SMTP服务器: {}:{}", config.smtp_server, config.port);
-        let send_start = Instant::now();
-        let mut client = match timeout(Duration::from_secs(config.smtp_timeout), 
-            SmtpClientBuilder::new(config.smtp_server.as_str(), config.port)
-                .implicit_tls(false)
-                .allow_invalid_certs()
-                .connect()
-        ).await {
-            Ok(result) => match result {
-                Ok(client) => client,
-                Err(e) => return Err(anyhow::anyhow!("SMTP连接失败: {}", e)),
-            },
-            Err(_) => return Err(anyhow::anyhow!("SMTP连接超时")),
-        };
-
-        info!("构建邮件: 主题「{}」", subject);
-        let builder = {
-            let mut b = MessageBuilder::new()
-                .from(("", config.from.as_str()))
-                .to(config.to.as_str())
-                .subject(&subject)
-                .text_body(&text_content);
-
-            if let Some(html) = &html_content {
-                b = b.html_body(html);
-            }
-            b
-        };
-
-        info!("发送邮件...");
-        match timeout(Duration::from_secs(config.smtp_timeout), client.send(builder)).await {
-            Ok(result) => match result {
-                Ok(_) => {
-                    info!("邮件发送成功！");
-                    Ok((parse_duration, send_start.elapsed()))
-                },
-                Err(e) => Err(anyhow::anyhow!("邮件发送失败: {}", e)),
-            },
-            Err(_) => Err(anyhow::anyhow!("邮件发送超时")),
-        }
+        info!("共找到 {} 个邮件文件", files.len());
+        Ok(files)
     }
 
     async fn send_batch_emails<T: AsyncRead + AsyncWrite + Unpin + Send>(
@@ -335,7 +191,7 @@ impl Mailer {
         let mut results = Vec::new();
         
         for file_path in files {
-            info!("开始读取文件: {}", file_path);
+            info!("读取文件: {}", file_path);
             let parse_start = Instant::now();
             let content = fs::read(file_path)?;
             
@@ -353,7 +209,7 @@ impl Mailer {
             let text_content = message.body_text(0).unwrap_or_default().to_string();
             let html_content = message.body_html(0).map(|s| s.to_string());
 
-            info!("构建邮件: 主题「{}」", subject);
+            info!("构建并发送邮件: 主题「{}」", subject);
             let builder = {
                 let mut b = MessageBuilder::new()
                     .from(("", config.from.as_str()))
@@ -367,7 +223,6 @@ impl Mailer {
                 b
             };
 
-            info!("发送邮件...");
             let send_start = Instant::now();
             match timeout(Duration::from_secs(config.smtp_timeout), client.send(builder)).await {
                 Ok(result) => match result {

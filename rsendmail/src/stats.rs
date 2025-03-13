@@ -28,30 +28,6 @@ impl Stats {
         }
     }
 
-    pub fn add_parse_duration(&mut self, duration: Duration) {
-        self.parse_durations.push(duration);
-    }
-
-    pub fn add_send_duration(&mut self, duration: Duration) {
-        self.send_durations.push(duration);
-    }
-
-    pub fn set_total_duration(&mut self, duration: Duration) {
-        self.total_duration = duration;
-    }
-
-    pub fn increment_count(&mut self) {
-        self.email_count += 1;
-    }
-
-    pub fn increment_parse_error(&mut self) {
-        self.parse_errors += 1;
-    }
-
-    pub fn increment_send_error(&mut self) {
-        self.send_errors += 1;
-    }
-
     pub fn increment_error(&mut self, error_type: &str, file_path: &str) {
         *self.error_details.entry(error_type.to_string()).or_insert(0) += 1;
         self.failed_files.entry(error_type.to_string())

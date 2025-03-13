@@ -9,7 +9,6 @@ mod mailer;
 mod stats;
 
 use crate::{config::Config, mailer::Mailer};
-use std::process;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
