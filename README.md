@@ -28,6 +28,12 @@ docker build -t rsendmail .
 
 ## Usage
 
+### Windows Usage
+Download the Windows executable (`rsendmail-windows-x86_64.exe`) from the [Releases](https://github.com/kpassy/RSendMail/releases) page.
+```
+rsendmail-windows-x86_64.exe --smtp-server <smtp_server> --port <port> --from <from_addr> --to <to_addr> --dir <email_dir> --processes <processes> --batch-size <batch_size>
+```
+
 ### Local Usage
 ```bash
 rsendmail --smtp-server <smtp_server> --port <port> --from <from_addr> --to <to_addr> --dir <email_dir> --processes <processes> --batch-size <batch_size>

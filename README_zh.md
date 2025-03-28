@@ -29,6 +29,12 @@ docker build -t rsendmail .
 
 ## 使用方法
 
+### Windows 使用
+从 [Releases](https://github.com/kpassy/RSendMail/releases) 页面下载Windows可执行文件（`rsendmail-windows-x86_64.exe`）。
+```
+rsendmail-windows-x86_64.exe --smtp-server <smtp服务器> --port <端口> --from <发件人> --to <收件人> --dir <邮件目录> --processes <进程数> --batch-size <批处理大小>
+```
+
 ### 本地使用
 ```bash
 rsendmail --smtp-server <smtp服务器> --port <端口> --from <发件人> --to <收件人> --dir <邮件目录> --processes <进程数> --batch-size <批处理大小>
