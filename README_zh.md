@@ -57,6 +57,7 @@ docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp服务器>
 - `--batch-size`: 每个SMTP会话连续发送的邮件数量（默认：1）
 - `--smtp-timeout`: SMTP会话超时时间（秒）（默认：30）
 - `--log-level`: 日志级别（error/warn/info/debug/trace）（默认：info）
+- `--keep-headers`: 保留原始邮件头（默认：false）
 
 ## 日志级别
 

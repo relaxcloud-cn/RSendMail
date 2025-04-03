@@ -44,6 +44,10 @@ pub struct Config {
     /// 日志级别 (error/warn/info/debug/trace)
     #[arg(long, default_value = "info")]
     pub log_level: String,
+
+    /// 是否保留原始邮件头
+    #[arg(long, default_value_t = false)]
+    pub keep_headers: bool,
 }
 
 #[derive(Debug, PartialEq)]

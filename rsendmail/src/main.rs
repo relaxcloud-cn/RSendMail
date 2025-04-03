@@ -1,6 +1,6 @@
 use clap::Parser;
 use env_logger::Env;
-use log::{info, error, warn};
+use log::{error, info, warn};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
