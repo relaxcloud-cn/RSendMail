@@ -49,15 +49,16 @@ docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp服务器>
 
 - `--smtp-server`: SMTP 服务器地址
 - `--port`: SMTP 服务器端口（默认：25）
-- `--from`: 发件人邮箱地址
-- `--to`: 收件人邮箱地址
+- `--from`: 发件人邮箱地址（用于SMTP信封，默认不修改邮件内容）
+- `--to`: 收件人邮箱地址（用于SMTP信封，默认不修改邮件内容）
 - `--dir`: 邮件文件所在目录
 - `--extension`: 邮件文件扩展名（默认：eml）
 - `--processes`: 进程数，auto表示自动设置为CPU核心数，或者指定具体数字（默认：auto）
 - `--batch-size`: 每个SMTP会话连续发送的邮件数量（默认：1）
 - `--smtp-timeout`: SMTP会话超时时间（秒）（默认：30）
 - `--log-level`: 日志级别（error/warn/info/debug/trace）（默认：info）
-- `--keep-headers`: 保留原始邮件头（默认：false）
+- `--keep-headers`: 保留原始邮件头（默认：false，优先级高于modify-headers）
+- `--modify-headers`: 使用--from和--to参数修改邮件头中的From和To（默认：false）
 - `--anonymize-emails`: 匿名化所有邮箱地址（默认：false）
 - `--anonymize-domain`: 匿名化使用的域名（默认：example.com）
 

@@ -30,7 +30,7 @@ docker build -t rsendmail .
 
 ### Windows Usage
 Download the Windows executable (`rsendmail-windows-x86_64.exe`) from the [Releases](https://github.com/kpassy/RSendMail/releases) page.
-```
+```bash
 rsendmail-windows-x86_64.exe --smtp-server <smtp_server> --port <port> --from <from_addr> --to <to_addr> --dir <email_dir> --processes <processes> --batch-size <batch_size>
 ```
 
@@ -48,15 +48,16 @@ docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp_server> -
 
 - `--smtp-server`: SMTP server address
 - `--port`: SMTP server port (default: 25)
-- `--from`: Sender email address
-- `--to`: Recipient email address
+- `--from`: Sender email address (for SMTP envelope, doesn't modify message content by default)
+- `--to`: Recipient email address (for SMTP envelope, doesn't modify message content by default)
 - `--dir`: Email files directory
 - `--extension`: Email file extension (default: eml)
 - `--processes`: Number of processes, "auto" for CPU core count or specify a number (default: auto)
 - `--batch-size`: Number of emails to send in a single SMTP session (default: 1)
 - `--smtp-timeout`: SMTP session timeout in seconds (default: 30)
 - `--log-level`: Log level (error/warn/info/debug/trace) (default: info)
-- `--keep-headers`: Keep original email headers (default: false)
+- `--keep-headers`: Keep original email headers (default: false, takes precedence over modify-headers)
+- `--modify-headers`: Use --from and --to to modify From and To headers in message content (default: false)
 - `--anonymize-emails`: Anonymize all email addresses (default: false)
 - `--anonymize-domain`: Domain to use for anonymized emails (default: example.com)
 

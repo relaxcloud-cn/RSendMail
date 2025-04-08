@@ -212,18 +212,18 @@ impl Mailer {
         } else {
             None
         };
-
+        
         for file_path in files {
             info!("读取文件: {}", file_path);
             let parse_start = Instant::now();
             let mut content = fs::read(file_path)?;
-
+            
             // 如果启用了邮箱匿名化，处理内容
             if let Some(anonymizer) = anonymizer.as_mut() {
                 info!("对邮件内容进行邮箱匿名化处理");
                 content = anonymizer.anonymize_binary(&content);
             }
-
+            
             info!("解析邮件内容");
             let message = match MessageParser::default().parse(&content) {
                 Some(msg) => msg,
@@ -235,77 +235,116 @@ impl Mailer {
             let parse_duration = parse_start.elapsed();
 
             let send_start = Instant::now();
-
+            
+            // 创建空参数对象
+            let empty_params = Parameters::default();
+            
             if config.keep_headers {
-                // 使用原始邮件头
+                // 使用原始邮件头 - 保留所有原始邮件头
                 info!("使用原始邮件头发送邮件");
-
-                // 创建空参数对象
-                let empty_params = Parameters::default();
-
-                // 设置信封发件人和收件人
+                
+                // 设置SMTP信封发件人和收件人
                 if let Err(e) = client.mail_from(config.from.as_str(), &empty_params).await {
                     return Err(anyhow::anyhow!("设置发件人失败: {}", e));
                 }
-
+                
                 if let Err(e) = client.rcpt_to(config.to.as_str(), &empty_params).await {
                     return Err(anyhow::anyhow!("设置收件人失败: {}", e));
                 }
-
+                
                 // 发送原始邮件内容
                 match timeout(
                     Duration::from_secs(config.smtp_timeout),
-                    client.data(&content),
-                )
-                .await
-                {
+                    client.data(&content)
+                ).await {
                     Ok(result) => match result {
                         Ok(_) => {
                             info!("邮件发送成功！");
                             results.push((parse_duration, send_start.elapsed()));
-                        }
+                        },
                         Err(e) => return Err(anyhow::anyhow!("邮件发送失败: {}", e)),
                     },
                     Err(_) => return Err(anyhow::anyhow!("邮件发送超时")),
                 }
-            } else {
+            } else if config.modify_headers {
+                // 修改邮件头中的From和To
+                info!("修改邮件头并发送邮件");
+                
                 // 使用提取的内容构建新邮件
                 let subject = message.subject().unwrap_or("No Subject").to_string();
                 let text_content = message.body_text(0).unwrap_or_default().to_string();
                 let html_content = message.body_html(0).map(|s| s.to_string());
 
-                info!("构建并发送邮件: 主题「{}」", subject);
-                let builder = {
-                    let mut b = MessageBuilder::new()
-                        .from(("", config.from.as_str()))
-                        .to(config.to.as_str())
-                        .subject(&subject)
-                        .text_body(&text_content);
-
-                    if let Some(html) = &html_content {
-                        b = b.html_body(html);
-                    }
-                    b
+                // 构建新的邮件内容
+                use mail_builder::MessageBuilder;
+                let builder = MessageBuilder::new()
+                    .from(("", config.from.as_str()))
+                    .to(config.to.as_str())
+                    .subject(&subject)
+                    .text_body(&text_content);
+                
+                let builder = if let Some(html) = &html_content {
+                    builder.html_body(html)
+                } else {
+                    builder
                 };
-
+                
+                // 生成邮件内容
+                let mail_content = builder.write_to_vec()?;
+                
+                // 设置SMTP信封发件人和收件人
+                if let Err(e) = client.mail_from(config.from.as_str(), &empty_params).await {
+                    return Err(anyhow::anyhow!("设置发件人失败: {}", e));
+                }
+                
+                if let Err(e) = client.rcpt_to(config.to.as_str(), &empty_params).await {
+                    return Err(anyhow::anyhow!("设置收件人失败: {}", e));
+                }
+                
+                // 发送生成的邮件内容
                 match timeout(
                     Duration::from_secs(config.smtp_timeout),
-                    client.send(builder),
-                )
-                .await
-                {
+                    client.data(&mail_content)
+                ).await {
                     Ok(result) => match result {
                         Ok(_) => {
                             info!("邮件发送成功！");
                             results.push((parse_duration, send_start.elapsed()));
-                        }
+                        },
+                        Err(e) => return Err(anyhow::anyhow!("邮件发送失败: {}", e)),
+                    },
+                    Err(_) => return Err(anyhow::anyhow!("邮件发送超时")),
+                }
+            } else {
+                // 保留原始邮件头，使用SMTP信封传递
+                info!("保留原始邮件头并发送邮件");
+                
+                // 设置SMTP信封发件人和收件人
+                if let Err(e) = client.mail_from(config.from.as_str(), &empty_params).await {
+                    return Err(anyhow::anyhow!("设置发件人失败: {}", e));
+                }
+                
+                if let Err(e) = client.rcpt_to(config.to.as_str(), &empty_params).await {
+                    return Err(anyhow::anyhow!("设置收件人失败: {}", e));
+                }
+                
+                // 发送原始邮件内容
+                match timeout(
+                    Duration::from_secs(config.smtp_timeout),
+                    client.data(&content)
+                ).await {
+                    Ok(result) => match result {
+                        Ok(_) => {
+                            info!("邮件发送成功！");
+                            results.push((parse_duration, send_start.elapsed()));
+                        },
                         Err(e) => return Err(anyhow::anyhow!("邮件发送失败: {}", e)),
                     },
                     Err(_) => return Err(anyhow::anyhow!("邮件发送超时")),
                 }
             }
         }
-
+        
         Ok(results)
     }
 }

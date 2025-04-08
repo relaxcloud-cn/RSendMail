@@ -56,6 +56,10 @@ pub struct Config {
     /// 邮箱匿名化域名（例如：example.com），匿名化后的邮箱将变为随机字符@domain
     #[arg(long, default_value = "example.com")]
     pub anonymize_domain: String,
+
+    /// 是否使用--from和--to参数修改邮件头中的From和To
+    #[arg(long, default_value_t = false)]
+    pub modify_headers: bool,
 }
 
 #[derive(Debug, PartialEq)]
