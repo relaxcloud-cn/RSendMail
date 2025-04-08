@@ -57,6 +57,8 @@ docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp_server> -
 - `--smtp-timeout`: SMTP session timeout in seconds (default: 30)
 - `--log-level`: Log level (error/warn/info/debug/trace) (default: info)
 - `--keep-headers`: Keep original email headers (default: false)
+- `--anonymize-emails`: Anonymize all email addresses (default: false)
+- `--anonymize-domain`: Domain to use for anonymized emails (default: example.com)
 
 ## Example
 
