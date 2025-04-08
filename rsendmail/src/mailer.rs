@@ -12,6 +12,7 @@ use tokio::task;
 use tokio::time::timeout;
 use walkdir::WalkDir;
 
+use crate::anonymizer::EmailAnonymizer;
 use crate::config::Config;
 use crate::stats::Stats;
 
@@ -205,11 +206,23 @@ impl Mailer {
         client: &mut SmtpClient<T>,
     ) -> Result<Vec<(Duration, Duration)>> {
         let mut results = Vec::new();
+        // 如果启用邮箱匿名化，创建匿名器
+        let mut anonymizer = if config.anonymize_emails {
+            Some(EmailAnonymizer::new(&config.anonymize_domain))
+        } else {
+            None
+        };
 
         for file_path in files {
             info!("读取文件: {}", file_path);
             let parse_start = Instant::now();
-            let content = fs::read(file_path)?;
+            let mut content = fs::read(file_path)?;
+
+            // 如果启用了邮箱匿名化，处理内容
+            if let Some(anonymizer) = anonymizer.as_mut() {
+                info!("对邮件内容进行邮箱匿名化处理");
+                content = anonymizer.anonymize_binary(&content);
+            }
 
             info!("解析邮件内容");
             let message = match MessageParser::default().parse(&content) {

@@ -48,6 +48,14 @@ pub struct Config {
     /// 是否保留原始邮件头
     #[arg(long, default_value_t = false)]
     pub keep_headers: bool,
+
+    /// 是否匿名化邮箱地址
+    #[arg(long, default_value_t = false)]
+    pub anonymize_emails: bool,
+
+    /// 邮箱匿名化域名（例如：example.com），匿名化后的邮箱将变为随机字符@domain
+    #[arg(long, default_value = "example.com")]
+    pub anonymize_domain: String,
 }
 
 #[derive(Debug, PartialEq)]

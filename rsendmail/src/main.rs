@@ -4,6 +4,7 @@ use log::{error, info, warn};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+mod anonymizer;
 mod config;
 mod mailer;
 mod stats;
