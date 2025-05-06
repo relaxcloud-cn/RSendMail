@@ -60,6 +60,14 @@ pub struct Config {
     /// 是否使用--from和--to参数修改邮件头中的From和To
     #[arg(long, default_value_t = false)]
     pub modify_headers: bool,
+
+    /// 是否无限循环发送（直到用户中断）
+    #[arg(long, default_value_t = false)]
+    pub r#loop: bool,
+
+    /// 重复发送次数
+    #[arg(long, default_value_t = 1)]
+    pub repeat: u32,
 }
 
 #[derive(Debug, PartialEq)]

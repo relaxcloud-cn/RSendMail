@@ -61,6 +61,8 @@ docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp服务器>
 - `--modify-headers`: 使用--from和--to参数修改邮件头中的From和To（默认：false）
 - `--anonymize-emails`: 匿名化所有邮箱地址（默认：false）
 - `--anonymize-domain`: 匿名化使用的域名（默认：example.com）
+- `--loop`: 无限循环发送邮件，直到用户中断（默认：false）
+- `--repeat`: 重复发送次数（默认：1）
 
 ## 日志级别
 

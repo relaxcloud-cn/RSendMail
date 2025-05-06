@@ -60,6 +60,8 @@ docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp_server> -
 - `--modify-headers`: Use --from and --to to modify From and To headers in message content (default: false)
 - `--anonymize-emails`: Anonymize all email addresses (default: false)
 - `--anonymize-domain`: Domain to use for anonymized emails (default: example.com)
+- `--loop`: Loop indefinitely until interrupted (default: false)
+- `--repeat`: Number of times to repeat sending (default: 1)
 
 ## Example
 
