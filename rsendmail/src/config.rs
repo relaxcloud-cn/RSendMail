@@ -68,6 +68,14 @@ pub struct Config {
     /// 重复发送次数
     #[arg(long, default_value_t = 1)]
     pub repeat: u32,
+    
+    /// 循环发送的间隔时间（秒）
+    #[arg(long, default_value_t = 1)]
+    pub loop_interval: u64,
+    
+    /// 发送失败后重试的间隔时间（秒）
+    #[arg(long, default_value_t = 5)]
+    pub retry_interval: u64,
 }
 
 #[derive(Debug, PartialEq)]

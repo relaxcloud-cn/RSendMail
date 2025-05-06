@@ -104,19 +104,19 @@ async fn main() -> anyhow::Result<()> {
 
                 // 如果设置了循环间隔，且不是最后一次循环，则等待一段时间
                 if iteration_count > 1 && running.load(Ordering::SeqCst) {
-                    info!("等待1秒后开始下一轮发送...");
-                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    info!("等待{}秒后开始下一轮发送...", config.loop_interval);
+                    tokio::time::sleep(Duration::from_secs(config.loop_interval)).await;
                 }
             }
             Err(e) => {
                 error!("第 {} 轮发送失败: {}", current_iteration, e);
-                // 修复逻辑：只有在非循环模式或用户已中断时才返回错误
+                // 如果是循环模式且用户没有中断，则继续下一次循环
                 if !config.r#loop || !running.load(Ordering::SeqCst) {
                     return Err(e);
                 }
                 // 否则等待后重试
-                info!("等待5秒后重试...");
-                tokio::time::sleep(Duration::from_secs(5)).await;
+                info!("等待{}秒后重试...", config.retry_interval);
+                tokio::time::sleep(Duration::from_secs(config.retry_interval)).await;
             }
         }
 

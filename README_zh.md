@@ -63,6 +63,8 @@ docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp服务器>
 - `--anonymize-domain`: 匿名化使用的域名（默认：example.com）
 - `--loop`: 无限循环发送邮件，直到用户中断（默认：false）
 - `--repeat`: 重复发送次数（默认：1）
+- `--loop-interval`: 循环发送的间隔时间（秒）（默认：1）
+- `--retry-interval`: 发送失败后重试的间隔时间（秒）（默认：5）
 
 ## 日志级别
 

@@ -62,6 +62,8 @@ docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp_server> -
 - `--anonymize-domain`: Domain to use for anonymized emails (default: example.com)
 - `--loop`: Loop indefinitely until interrupted (default: false)
 - `--repeat`: Number of times to repeat sending (default: 1)
+- `--loop-interval`: Interval between sending loops in seconds (default: 1)
+- `--retry-interval`: Interval before retrying after failure in seconds (default: 5)
 
 ## Example
 
