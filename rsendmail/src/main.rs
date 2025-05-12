@@ -62,9 +62,9 @@ async fn main() -> anyhow::Result<()> {
             }
         );
 
-        // 发送邮件并获取统计信息
+    // 发送邮件并获取统计信息
         match mailer.send_all_with_cancel(running.clone()).await {
-            Ok(stats) => {
+        Ok(stats) => {
                 successful_iterations += 1;
 
                 // 累加统计信息
@@ -100,15 +100,15 @@ async fn main() -> anyhow::Result<()> {
                 }
 
                 info!("第 {} 轮发送完成！", current_iteration);
-                info!("{}", stats);
+            info!("{}", stats);
 
                 // 如果设置了循环间隔，且不是最后一次循环，则等待一段时间
                 if iteration_count > 1 && running.load(Ordering::SeqCst) {
                     info!("等待{}秒后开始下一轮发送...", config.loop_interval);
                     tokio::time::sleep(Duration::from_secs(config.loop_interval)).await;
                 }
-            }
-            Err(e) => {
+        }
+        Err(e) => {
                 error!("第 {} 轮发送失败: {}", current_iteration, e);
                 // 如果是循环模式且用户没有中断，则继续下一次循环
                 if !config.r#loop || !running.load(Ordering::SeqCst) {

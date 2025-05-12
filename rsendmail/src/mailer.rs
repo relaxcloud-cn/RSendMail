@@ -4,6 +4,7 @@ use mail_parser::MessageParser;
 use mail_send::smtp::message::Parameters;
 use mail_send::{SmtpClient, SmtpClientBuilder};
 use std::fs;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -25,7 +26,32 @@ impl Mailer {
         Self { config }
     }
 
+    // 处理模板变量替换
+    fn process_template(template: &str, filename: &str) -> String {
+        template.replace("{filename}", filename)
+    }
+
+    // 获取文件名（不含路径）
+    fn get_filename(path: &str) -> String {
+        Path::new(path)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| String::from("未知文件"))
+    }
+
     pub async fn send_all_with_cancel(&self, running: Arc<AtomicBool>) -> Result<Stats> {
+        // 检查是否提供了附件目录
+        if let Some(attachment_dir) = &self.config.attachment_dir {
+            info!("检测到附件目录模式：{}", attachment_dir);
+            return self.send_attachment_dir_with_cancel(attachment_dir, running).await;
+        }
+        
+        // 检查是否提供了单个附件
+        if let Some(attachment_path) = &self.config.attachment {
+            info!("检测到附件模式：{}", attachment_path);
+            return self.send_attachment_with_cancel(attachment_path, running).await;
+        }
+        
         let files = self.collect_email_files()?;
         let mut stats = Stats::new();
 
@@ -43,6 +69,333 @@ impl Mailer {
             }
         }
 
+        Ok(stats)
+    }
+    
+    // 发送附件目录中的所有文件
+    async fn send_attachment_dir_with_cancel(
+        &self,
+        attachment_dir: &str,
+        running: Arc<AtomicBool>,
+    ) -> Result<Stats> {
+        info!("准备发送目录中的所有文件作为附件：{}", attachment_dir);
+        let mut stats = Stats::new();
+        let start = Instant::now();
+        
+        // 检查目录是否存在
+        let dir_path = Path::new(attachment_dir);
+        if !dir_path.exists() || !dir_path.is_dir() {
+            error!("附件目录不存在或不是一个目录: {}", attachment_dir);
+            return Err(anyhow::anyhow!("附件目录不存在或不是一个目录"));
+        }
+        
+        // 收集目录中的所有文件
+        let mut files = Vec::new();
+        info!("开始扫描目录中的文件: {}", attachment_dir);
+        
+        for entry in WalkDir::new(attachment_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            if entry.file_type().is_file() {
+                if let Some(path_str) = entry.path().to_str() {
+                    files.push(path_str.to_string());
+                }
+            }
+        }
+        
+        info!("共找到 {} 个文件用于发送", files.len());
+        
+        if files.is_empty() {
+            info!("目录为空，没有文件可发送");
+            stats.total_duration = start.elapsed();
+            return Ok(stats);
+        }
+        
+        // 创建SMTP连接
+        info!("连接SMTP服务器: {}:{}", self.config.smtp_server, self.config.port);
+        let client_result = match timeout(
+            Duration::from_secs(self.config.smtp_timeout),
+            SmtpClientBuilder::new(self.config.smtp_server.as_str(), self.config.port)
+                .connect_plain(),
+        ).await {
+            Ok(result) => result,
+            Err(_) => {
+                error!("SMTP连接超时");
+                stats.increment_error("SMTP连接超时", attachment_dir);
+                return Ok(stats);
+            }
+        };
+
+        let mut client = match client_result {
+            Ok(client) => client,
+            Err(e) => {
+                error!("SMTP连接失败: {}", e);
+                stats.increment_error("SMTP连接失败", attachment_dir);
+                return Ok(stats);
+            }
+        };
+        
+        // 逐个发送每个文件
+        for file_path in &files {
+            if !running.load(Ordering::SeqCst) {
+                warn!("收到中断信号，正在退出...");
+                break;
+            }
+            
+            let send_start = Instant::now();
+            
+            // 获取文件名用于模板替换
+            let filename = Self::get_filename(file_path);
+            
+            // 准备主题和内容
+            let subject = match &self.config.subject_template {
+                Some(template) => Self::process_template(template, &filename),
+                None => format!("附件: {}", filename),
+            };
+            
+            let text_content = match &self.config.text_template {
+                Some(template) => Self::process_template(template, &filename),
+                None => format!("请查收附件: {}", filename),
+            };
+
+            let html_content = self.config.html_template.as_ref()
+                .map(|template| Self::process_template(template, &filename));
+            
+            // 设置SMTP信封
+            let empty_params = Parameters::default();
+            if let Err(e) = client.mail_from(self.config.from.as_str(), &empty_params).await {
+                error!("设置发件人失败: {}", e);
+                stats.increment_error("设置发件人失败", file_path);
+                continue;
+            }
+
+            if let Err(e) = client.rcpt_to(self.config.to.as_str(), &empty_params).await {
+                error!("设置收件人失败: {}", e);
+                stats.increment_error("设置收件人失败", file_path);
+                continue;
+            }
+            
+            // 读取附件内容
+            info!("读取文件: {}", file_path);
+            let attachment_content = match fs::read(file_path) {
+                Ok(content) => content,
+                Err(e) => {
+                    error!("读取附件文件失败: {}", e);
+                    stats.increment_error("读取附件文件失败", file_path);
+                    continue;
+                }
+            };
+            
+            // 构建邮件
+            use mail_send::mail_builder::MessageBuilder;
+            let mut builder = MessageBuilder::new()
+                .from(("", self.config.from.as_str()))
+                .to(self.config.to.as_str())
+                .subject(&subject)
+                .text_body(&text_content);
+
+            // 添加HTML内容（如果有）
+            if let Some(html) = &html_content {
+                builder = builder.html_body(html);
+            }
+
+            // 添加附件
+            // 获取文件的MIME类型
+            let mime_type = match infer::get_from_path(file_path) {
+                Ok(Some(kind)) => kind.mime_type(),
+                _ => "application/octet-stream",
+            };
+
+            builder = builder.attachment(mime_type, &filename, &attachment_content[..]);
+
+            // 生成邮件内容
+            let mail_content = match builder.write_to_vec() {
+                Ok(content) => content,
+                Err(e) => {
+                    error!("生成邮件内容失败: {}", e);
+                    stats.increment_error("生成邮件内容失败", file_path);
+                    continue;
+                }
+            };
+
+            // 发送邮件
+            info!("发送附件邮件: {}", filename);
+            match timeout(
+                Duration::from_secs(self.config.smtp_timeout),
+                client.data(&mail_content),
+            ).await {
+                Ok(result) => match result {
+                    Ok(_) => {
+                        info!("附件邮件发送成功！");
+                        stats.email_count += 1;
+                        stats.parse_durations.push(Duration::from_secs(0)); // 没有解析过程
+                        stats.send_durations.push(send_start.elapsed());
+                    }
+                    Err(e) => {
+                        error!("邮件发送失败: {}", e);
+                        stats.increment_error("邮件发送失败", file_path);
+                    }
+                },
+                Err(_) => {
+                    error!("邮件发送超时");
+                    stats.increment_error("邮件发送超时", file_path);
+                }
+            }
+        }
+        
+        // 关闭连接
+        let _ = client.quit().await;
+        
+        stats.total_duration = start.elapsed();
+        Ok(stats)
+    }
+
+    // 发送附件文件
+    async fn send_attachment_with_cancel(
+        &self, 
+        attachment_path: &str, 
+        running: Arc<AtomicBool>
+    ) -> Result<Stats> {
+        info!("准备发送附件：{}", attachment_path);
+        let mut stats = Stats::new();
+        let start = Instant::now();
+
+        if !Path::new(attachment_path).exists() {
+            error!("附件文件不存在: {}", attachment_path);
+            return Err(anyhow::anyhow!("附件文件不存在"));
+        }
+
+        // 获取文件名用于模板替换
+        let filename = Self::get_filename(attachment_path);
+        
+        // 准备主题和内容
+        let subject = match &self.config.subject_template {
+            Some(template) => Self::process_template(template, &filename),
+            None => format!("附件: {}", filename),
+        };
+        
+        let text_content = match &self.config.text_template {
+            Some(template) => Self::process_template(template, &filename),
+            None => format!("请查收附件: {}", filename),
+        };
+
+        let html_content = self.config.html_template.as_ref()
+            .map(|template| Self::process_template(template, &filename));
+
+        info!("连接SMTP服务器: {}:{}", self.config.smtp_server, self.config.port);
+        let client_result = match timeout(
+            Duration::from_secs(self.config.smtp_timeout),
+            SmtpClientBuilder::new(self.config.smtp_server.as_str(), self.config.port)
+                .connect_plain(),
+        ).await {
+            Ok(result) => result,
+            Err(_) => {
+                error!("SMTP连接超时");
+                stats.increment_error("SMTP连接超时", attachment_path);
+                return Ok(stats);
+            }
+        };
+
+        let mut client = match client_result {
+            Ok(client) => client,
+            Err(e) => {
+                error!("SMTP连接失败: {}", e);
+                stats.increment_error("SMTP连接失败", attachment_path);
+                return Ok(stats);
+            }
+        };
+
+        if !running.load(Ordering::SeqCst) {
+            warn!("收到中断信号，正在退出...");
+            return Ok(stats);
+        }
+
+        let send_start = Instant::now();
+
+        // 设置SMTP信封
+        let empty_params = Parameters::default();
+        if let Err(e) = client.mail_from(self.config.from.as_str(), &empty_params).await {
+            error!("设置发件人失败: {}", e);
+            stats.increment_error("设置发件人失败", attachment_path);
+            return Ok(stats);
+        }
+
+        if let Err(e) = client.rcpt_to(self.config.to.as_str(), &empty_params).await {
+            error!("设置收件人失败: {}", e);
+            stats.increment_error("设置收件人失败", attachment_path);
+            return Ok(stats);
+        }
+
+        // 读取附件内容
+        let attachment_content = match fs::read(attachment_path) {
+            Ok(content) => content,
+            Err(e) => {
+                error!("读取附件文件失败: {}", e);
+                stats.increment_error("读取附件文件失败", attachment_path);
+                return Ok(stats);
+            }
+        };
+
+        // 构建邮件
+        use mail_send::mail_builder::MessageBuilder;
+        let mut builder = MessageBuilder::new()
+            .from(("", self.config.from.as_str()))
+            .to(self.config.to.as_str())
+            .subject(&subject)
+            .text_body(&text_content);
+
+        // 添加HTML内容（如果有）
+        if let Some(html) = &html_content {
+            builder = builder.html_body(html);
+        }
+
+        // 添加附件
+        // 获取文件的MIME类型
+        let mime_type = match infer::get_from_path(attachment_path) {
+            Ok(Some(kind)) => kind.mime_type(),
+            _ => "application/octet-stream",
+        };
+
+        builder = builder.attachment(mime_type, &filename, &attachment_content[..]);
+
+        // 生成邮件内容
+        let mail_content = match builder.write_to_vec() {
+            Ok(content) => content,
+            Err(e) => {
+                error!("生成邮件内容失败: {}", e);
+                stats.increment_error("生成邮件内容失败", attachment_path);
+                return Ok(stats);
+            }
+        };
+
+        // 发送邮件
+        match timeout(
+            Duration::from_secs(self.config.smtp_timeout),
+            client.data(&mail_content),
+        ).await {
+            Ok(result) => match result {
+                Ok(_) => {
+                    info!("附件邮件发送成功！");
+                    stats.email_count = 1;
+                    stats.parse_durations.push(Duration::from_secs(0)); // 没有解析过程
+                    stats.send_durations.push(send_start.elapsed());
+                }
+                Err(e) => {
+                    error!("邮件发送失败: {}", e);
+                    stats.increment_error("邮件发送失败", attachment_path);
+                }
+            },
+            Err(_) => {
+                error!("邮件发送超时");
+                stats.increment_error("邮件发送超时", attachment_path);
+            }
+        }
+
+        // 关闭连接
+        let _ = client.quit().await;
+
+        stats.total_duration = start.elapsed();
         Ok(stats)
     }
 
@@ -179,9 +532,19 @@ impl Mailer {
 
     fn collect_email_files(&self) -> Result<Vec<String>> {
         let mut files = Vec::new();
-        info!("开始扫描目录: {}", self.config.dir);
+        
+        // 检查dir是否存在
+        let dir = match &self.config.dir {
+            Some(dir_path) => dir_path,
+            None => {
+                info!("使用附件模式，跳过邮件文件扫描");
+                return Ok(files);
+            }
+        };
+        
+        info!("开始扫描目录: {}", dir);
 
-        for entry in WalkDir::new(&self.config.dir)
+        for entry in WalkDir::new(dir)
             .into_iter()
             .filter_map(|e| e.ok())
         {

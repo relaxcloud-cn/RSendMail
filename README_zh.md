@@ -4,6 +4,10 @@
 
 [English](README.md) | 简体中文
 
+![Release](https://img.shields.io/github/v/release/kpassy/RSendMail?color=blue&include_prereleases)
+![License](https://img.shields.io/github/license/kpassy/RSendMail)
+![Stars](https://img.shields.io/github/stars/kpassy/RSendMail?style=social)
+
 ## 功能特点
 
 - 批量处理和发送多个邮件
@@ -13,6 +17,24 @@
 - 详细的错误跟踪和统计信息
 - Docker 支持便于部署
 - 支持在单个 SMTP 会话中批量发送
+- 支持发送普通文件作为附件
+- 支持批量发送目录中的所有文件作为单独的邮件
+
+## 附件功能说明
+
+RSendMail现在支持将普通文件作为附件发送，无需先创建EML文件。这对于快速发送文件测试非常有用。
+
+### 附件模式特点
+
+- 自动检测文件MIME类型
+- 支持自定义邮件主题和内容
+- 使用模板变量自动填充文件名
+- 可选HTML内容支持
+- 与批量EML发送功能完全独立
+- 支持发送单个文件（使用`--attachment`）或目录中的全部文件（使用`--attachment-dir`）
+- 在附件模式下不需要提供`--dir`参数
+
+### 模板变量
 
 ## 构建
 
@@ -51,7 +73,7 @@ docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp服务器>
 - `--port`: SMTP 服务器端口（默认：25）
 - `--from`: 发件人邮箱地址（用于SMTP信封，默认不修改邮件内容）
 - `--to`: 收件人邮箱地址（用于SMTP信封，默认不修改邮件内容）
-- `--dir`: 邮件文件所在目录
+- `--dir`: 邮件文件所在目录（仅在使用EML发送模式时需要，使用--attachment或--attachment-dir时不需要）
 - `--extension`: 邮件文件扩展名（默认：eml）
 - `--processes`: 进程数，auto表示自动设置为CPU核心数，或者指定具体数字（默认：auto）
 - `--batch-size`: 每个SMTP会话连续发送的邮件数量（默认：1）
@@ -65,6 +87,11 @@ docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp服务器>
 - `--repeat`: 重复发送次数（默认：1）
 - `--loop-interval`: 循环发送的间隔时间（秒）（默认：1）
 - `--retry-interval`: 发送失败后重试的间隔时间（秒）（默认：5）
+- `--attachment`: 附件文件路径，用于发送普通文件作为附件
+- `--attachment-dir`: 附件目录路径，发送目录下所有文件为单独的邮件（每个文件一封邮件）
+- `--subject-template`: 主题模板，支持变量{filename}（默认："附件: {filename}"）
+- `--text-template`: 文本内容模板，支持变量{filename}（默认："请查收附件: {filename}"）
+- `--html-template`: HTML内容模板，支持变量{filename}
 
 ## 日志级别
 
@@ -90,34 +117,13 @@ rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to r
 
 # Docker 运行示例
 docker run --rm -v $(pwd)/emails:/data rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to recipient@example.com --dir /data --processes 10 --batch-size 5 --log-level info
+
+# 发送单个附件示例（不需要--dir参数）
+rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to recipient@example.com --attachment ./document.pdf
+
+# 使用自定义模板发送附件（不需要--dir参数）
+rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to recipient@example.com --attachment ./document.pdf --subject-template "重要文件: {filename}" --text-template "您好，\n\n请查收附件：{filename}。\n\n此致，\nRSendMail团队"
+
+# 批量发送目录中的所有文件为独立的邮件（不需要--dir参数）
+rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to recipient@example.com --attachment-dir ./documents --subject-template "文件: {filename}"
 ```
-
-## Docker 容器说明
-
-Docker 容器设计考虑了安全性和效率：
-
-- 基于 debian:bookworm-slim，保持最小体积
-- 以非 root 用户运行
-- 仅包含必要的运行时依赖
-- 使用卷挂载邮件文件
-- 无状态操作
-
-### 容器结构
-
-- `/usr/local/bin/rsendmail`: 应用程序二进制文件
-- `/data`: 邮件文件挂载点（卷）
-
-## 性能特点
-
-- 多线程并行处理
-- 高效的内存使用
-- 快速的邮件解析和发送
-- 详细的性能统计输出
-- 支持批量发送以提高效率
-
-## 安全特性
-
-- 非 root 用户执行
-- 最小容器体积
-- 隔离的运行环境
-- 无持久存储

@@ -22,8 +22,8 @@ pub struct Config {
     pub to: String,
 
     /// 邮件文件所在目录
-    #[arg(long)]
-    pub dir: String,
+    #[arg(long, required_unless_present_any = ["attachment", "attachment_dir"])]
+    pub dir: Option<String>,
 
     /// 邮件文件扩展名
     #[arg(long, default_value = "eml")]
@@ -76,6 +76,26 @@ pub struct Config {
     /// 发送失败后重试的间隔时间（秒）
     #[arg(long, default_value_t = 5)]
     pub retry_interval: u64,
+
+    /// 附件文件路径，用于发送普通文件作为附件
+    #[arg(long)]
+    pub attachment: Option<String>,
+    
+    /// 附件目录路径，发送目录下所有文件为单独的邮件
+    #[arg(long)]
+    pub attachment_dir: Option<String>,
+
+    /// 主题模板，支持变量 {filename}
+    #[arg(long)]
+    pub subject_template: Option<String>,
+
+    /// 文本内容模板，支持变量 {filename}
+    #[arg(long)]
+    pub text_template: Option<String>,
+
+    /// HTML内容模板，支持变量 {filename}
+    #[arg(long)]
+    pub html_template: Option<String>,
 }
 
 #[derive(Debug, PartialEq)]

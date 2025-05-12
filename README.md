@@ -1,19 +1,26 @@
 # RSendMail
-Used for batch sending emails for testing
+
+A high-performance testing tool for bulk email sending
 
 English | [简体中文](README_zh.md)
 
+![Release](https://img.shields.io/github/v/release/kpassy/RSendMail?color=blue&include_prereleases)
+![License](https://img.shields.io/github/license/kpassy/RSendMail)
+![Stars](https://img.shields.io/github/stars/kpassy/RSendMail?style=social)
+
 ## Features
 
-- Batch process and send multiple emails
+- Batch processing and sending of multiple emails
 - Multi-threaded processing for improved performance
-- Support for custom SMTP server configuration
-- Detailed logging with configurable levels (error/warn/info/debug/trace)
-- Comprehensive error tracking and statistics
+- Custom SMTP server configuration
+- Multiple logging levels (error/warn/info/debug/trace)
+- Detailed error tracking and statistics
 - Docker support for easy deployment
-- Support for batch sending in single SMTP session
+- Batch sending in a single SMTP session
+- Support for sending regular files as attachments
+- Support for sending all files in a directory as separate emails
 
-## Building
+## Build
 
 ### Local Build
 ```bash
@@ -29,84 +36,94 @@ docker build -t rsendmail .
 ## Usage
 
 ### Windows Usage
-Download the Windows executable (`rsendmail-windows-x86_64.exe`) from the [Releases](https://github.com/kpassy/RSendMail/releases) page.
+Download Windows executable (`rsendmail-windows-x86_64.exe`) from the [Releases](https://github.com/kpassy/RSendMail/releases) page.
 ```bash
-rsendmail-windows-x86_64.exe --smtp-server <smtp_server> --port <port> --from <from_addr> --to <to_addr> --dir <email_dir> --processes <processes> --batch-size <batch_size>
+rsendmail-windows-x86_64.exe --smtp-server <smtp_server> --port <port> --from <sender> --to <recipient> --dir <email_directory> --processes <num_processes> --batch-size <batch_size>
 ```
 
 ### Local Usage
 ```bash
-rsendmail --smtp-server <smtp_server> --port <port> --from <from_addr> --to <to_addr> --dir <email_dir> --processes <processes> --batch-size <batch_size>
+rsendmail --smtp-server <smtp_server> --port <port> --from <sender> --to <recipient> --dir <email_directory> --processes <num_processes> --batch-size <batch_size>
 ```
 
 ### Docker Usage
 ```bash
-docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp_server> --port <port> --from <from_addr> --to <to_addr> --dir /data --processes <processes> --batch-size <batch_size>
+docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp_server> --port <port> --from <sender> --to <recipient> --dir /data --processes <num_processes> --batch-size <batch_size>
 ```
 
-### Parameters
+### Command-line Options
 
 - `--smtp-server`: SMTP server address
 - `--port`: SMTP server port (default: 25)
-- `--from`: Sender email address (for SMTP envelope, doesn't modify message content by default)
-- `--to`: Recipient email address (for SMTP envelope, doesn't modify message content by default)
-- `--dir`: Email files directory
+- `--from`: Sender email address (for SMTP envelope, doesn't modify email content by default)
+- `--to`: Recipient email address (for SMTP envelope, doesn't modify email content by default)
+- `--dir`: Directory containing email files (only required when sending EML files, not needed when using --attachment or --attachment-dir)
 - `--extension`: Email file extension (default: eml)
-- `--processes`: Number of processes, "auto" for CPU core count or specify a number (default: auto)
-- `--batch-size`: Number of emails to send in a single SMTP session (default: 1)
+- `--processes`: Number of processes, auto sets to CPU core count, or specify a number (default: auto)
+- `--batch-size`: Number of emails to send in each SMTP session (default: 1)
 - `--smtp-timeout`: SMTP session timeout in seconds (default: 30)
-- `--log-level`: Log level (error/warn/info/debug/trace) (default: info)
-- `--keep-headers`: Keep original email headers (default: false, takes precedence over modify-headers)
-- `--modify-headers`: Use --from and --to to modify From and To headers in message content (default: false)
+- `--log-level`: Logging level (error/warn/info/debug/trace) (default: info)
+- `--keep-headers`: Preserve original email headers (default: false, takes precedence over modify-headers)
+- `--modify-headers`: Use --from and --to to modify From and To in email headers (default: false)
 - `--anonymize-emails`: Anonymize all email addresses (default: false)
-- `--anonymize-domain`: Domain to use for anonymized emails (default: example.com)
+- `--anonymize-domain`: Domain to use for anonymization (default: example.com)
 - `--loop`: Loop indefinitely until interrupted (default: false)
 - `--repeat`: Number of times to repeat sending (default: 1)
-- `--loop-interval`: Interval between sending loops in seconds (default: 1)
-- `--retry-interval`: Interval before retrying after failure in seconds (default: 5)
+- `--loop-interval`: Interval between loops in seconds (default: 1)
+- `--retry-interval`: Interval between retries after failure in seconds (default: 5)
+- `--attachment`: Path to a file to send as an attachment
+- `--attachment-dir`: Path to a directory with files to send as separate emails (one email per file)
+- `--subject-template`: Subject template, supports {filename} variable (default: "Attachment: {filename}")
+- `--text-template`: Text content template, supports {filename} variable (default: "Please find the attached file: {filename}")
+- `--html-template`: HTML content template, supports {filename} variable
 
-## Example
+## Logging Levels
+
+The application supports different logging levels to control verbosity:
+
+- `error`: Show only error messages
+- `warn`: Show warnings and errors
+- `info`: Show general progress information (default)
+- `debug`: Show detailed debugging information
+- `trace`: Show most detailed tracing information
+
+## Usage Examples
 
 ```bash
-# Local example
-# Normal logging (info level)
+# Default logging level (info)
 rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to recipient@example.com --dir ./emails --processes 10 --batch-size 5
 
-# Detailed debug logging
+# Detailed debugging output
 rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to recipient@example.com --dir ./emails --processes 10 --batch-size 5 --log-level debug
 
+# Only error messages
+rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to recipient@example.com --dir ./emails --processes 10 --batch-size 5 --log-level error
+
 # Docker example
-docker run --rm -v $(pwd)/emails:/data rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to recipient@example.com --dir /data --processes 10 --batch-size 5
+docker run --rm -v $(pwd)/emails:/data rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to recipient@example.com --dir /data --processes 10 --batch-size 5 --log-level info
+
+# Sending a single attachment (--dir parameter not needed)
+rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to recipient@example.com --attachment ./document.pdf
+
+# Using custom templates with attachment (--dir parameter not needed)
+rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to recipient@example.com --attachment ./document.pdf --subject-template "Important file: {filename}" --text-template "Hello,\n\nPlease find the attached file: {filename}.\n\nRegards,\nRSendMail Team"
+
+# Sending all files in a directory as separate emails (--dir parameter not needed)
+rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to recipient@example.com --attachment-dir ./documents --subject-template "File: {filename}"
 ```
 
-## Docker Container
+## Attachment Feature Details
 
-The Docker container is designed with security and efficiency in mind:
+RSendMail now supports sending regular files as email attachments without the need to create EML files first. This is useful for quickly testing file sending.
 
-- Based on debian:bookworm-slim for minimal size
-- Runs as non-root user
-- Includes only necessary runtime dependencies
-- Uses volume mounting for email files
-- Stateless operation
+### Attachment Mode Features
 
-### Container Structure
+- Automatic MIME type detection
+- Customizable email subject and content
+- Template variables for automatic filename insertion
+- Optional HTML content support
+- Independent from batch EML sending functionality
+- Support for sending a single file (using `--attachment`) or all files in a directory (using `--attachment-dir`)
+- No need to provide the `--dir` parameter when using attachment modes
 
-- `/usr/local/bin/rsendmail`: Application binary
-- `/data`: Mount point for email files (volume)
-
-## Performance
-
-- Multi-threaded processing
-- Efficient memory usage
-- Fast email parsing and sending
-- Detailed performance statistics output
-- Support for batch sending in single SMTP session for improved efficiency
-
-## Security
-
-- Non-root user execution
-- Minimal container footprint
-- Isolated runtime environment
-- No persistent storage
-
-![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/relaxcloud-cn/RSendMail?utm_source=oss&utm_medium=github&utm_campaign=relaxcloud-cn%2FRSendMail&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+### Template Variables
