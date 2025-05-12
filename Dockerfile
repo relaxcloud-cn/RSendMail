@@ -1,5 +1,5 @@
 # 第一阶段：依赖缓存层
-FROM rust:1.81-slim as cacher
+FROM rust:1.86-slim as cacher
 WORKDIR /usr/src/app/rsendmail
 COPY rsendmail/Cargo.* ./
 RUN rm -f Cargo.lock && \
@@ -8,7 +8,7 @@ RUN rm -f Cargo.lock && \
     cargo fetch
 
 # 第二阶段：构建层
-FROM rust:1.81-slim as builder
+FROM rust:1.86-slim as builder
 WORKDIR /usr/src/app/rsendmail
 COPY --from=cacher /usr/local/cargo /usr/local/cargo
 COPY rsendmail .
