@@ -41,18 +41,20 @@ impl Mailer {
     }
 
     pub async fn send_all_with_cancel(&self, running: Arc<AtomicBool>) -> Result<Stats> {
-        // 检查是否提供了附件目录
         if let Some(attachment_dir) = &self.config.attachment_dir {
             info!("检测到附件目录模式：{}", attachment_dir);
-            return self.send_attachment_dir_with_cancel(attachment_dir, running).await;
+            return self
+                .send_attachment_dir_with_cancel(attachment_dir, running)
+                .await;
         }
-        
-        // 检查是否提供了单个附件
+
         if let Some(attachment_path) = &self.config.attachment {
             info!("检测到附件模式：{}", attachment_path);
-            return self.send_attachment_with_cancel(attachment_path, running).await;
+            return self
+                .send_attachment_with_cancel(attachment_path, running)
+                .await;
         }
-        
+
         let files = self.collect_email_files()?;
         let mut stats = Stats::new();
 
@@ -72,8 +74,7 @@ impl Mailer {
 
         Ok(stats)
     }
-    
-    // 发送附件目录中的所有文件
+
     async fn send_attachment_dir_with_cancel(
         &self,
         attachment_dir: &str,
@@ -82,18 +83,15 @@ impl Mailer {
         info!("准备发送目录中的所有文件作为附件：{}", attachment_dir);
         let mut stats = Stats::new();
         let start = Instant::now();
-        
-        // 检查目录是否存在
+
         let dir_path = Path::new(attachment_dir);
         if !dir_path.exists() || !dir_path.is_dir() {
             error!("附件目录不存在或不是一个目录: {}", attachment_dir);
             return Err(anyhow::anyhow!("附件目录不存在或不是一个目录"));
         }
-        
-        // 收集目录中的所有文件
+
         let mut files = Vec::new();
         info!("开始扫描目录中的文件: {}", attachment_dir);
-        
         for entry in WalkDir::new(attachment_dir)
             .into_iter()
             .filter_map(|e| e.ok())
@@ -104,81 +102,88 @@ impl Mailer {
                 }
             }
         }
-        
         info!("共找到 {} 个文件用于发送", files.len());
-        
+
         if files.is_empty() {
             info!("目录为空，没有文件可发送");
             stats.total_duration = start.elapsed();
             return Ok(stats);
         }
-        
-        // 创建SMTP连接
-        info!("连接SMTP服务器: {}:{}", self.config.smtp_server, self.config.port);
+
+        // For send_attachment_dir_with_cancel, assuming non-authenticated, plain connection for simplicity for now.
+        // If auth or TLS is needed here, logic similar to send_attachment_with_cancel is required.
+        info!(
+            "连接SMTP服务器: {}:{}",
+            self.config.smtp_server, self.config.port
+        );
+        let client_builder =
+            SmtpClientBuilder::new(self.config.smtp_server.as_str(), self.config.port);
+
+        // Simplified: if TLS is configured for attachment_dir, it would be complex without auth details.
+        // Sticking to plain connection for this mode as per original simpler logic.
+        // If self.config.use_tls or self.config.port == 465, this mode might not work as expected without full TLS/auth setup.
+        // For now, we assume connect_plain is the intended path for this specific function (send_attachment_dir)
+
         let client_result = match timeout(
             Duration::from_secs(self.config.smtp_timeout),
-            SmtpClientBuilder::new(self.config.smtp_server.as_str(), self.config.port)
-                .connect_plain(),
-        ).await {
+            client_builder.connect_plain(),
+        )
+        .await
+        {
             Ok(result) => result,
             Err(_) => {
-                error!("SMTP连接超时");
-                stats.increment_error("SMTP连接超时", attachment_dir);
-                return Ok(stats);
+                error!("SMTP连接超时 (附件目录模式)");
+                stats.increment_error("SMTP连接超时 (附件目录模式)", attachment_dir);
+                return Ok(stats); // Return stats with error
             }
         };
 
         let mut client = match client_result {
             Ok(client) => client,
             Err(e) => {
-                error!("SMTP连接失败: {}", e);
-                stats.increment_error("SMTP连接失败", attachment_dir);
-                return Ok(stats);
+                error!("SMTP连接失败 (附件目录模式): {}", e);
+                stats.increment_error("SMTP连接失败 (附件目录模式)", attachment_dir);
+                return Ok(stats); // Return stats with error
             }
         };
-        
-        // 逐个发送每个文件
+
         for (file_idx, file_path) in files.iter().enumerate() {
             if !running.load(Ordering::SeqCst) {
                 warn!("收到中断信号，正在退出...");
                 break;
             }
-            
-            let send_start = Instant::now();
-            
-            // 获取文件名用于模板替换
-            let filename = Self::get_filename(file_path);
-            
-            // 准备主题和内容
-            let subject = match &self.config.subject_template {
-                Some(template) => Self::process_template(template, &filename),
-                None => format!("附件: {}", filename),
-            };
-            
-            let text_content = match &self.config.text_template {
-                Some(template) => Self::process_template(template, &filename),
-                None => format!("请查收附件: {}", filename),
-            };
 
-            let html_content = self.config.html_template.as_ref()
+            let send_start = Instant::now();
+            let filename = Self::get_filename(file_path);
+            let subject = self.config.subject_template.as_ref().map_or_else(
+                || format!("附件: {}", filename),
+                |template| Self::process_template(template, &filename),
+            );
+            let text_content = self.config.text_template.as_ref().map_or_else(
+                || format!("请查收附件: {}", filename),
+                |template| Self::process_template(template, &filename),
+            );
+            let html_content = self
+                .config
+                .html_template
+                .as_ref()
                 .map(|template| Self::process_template(template, &filename));
-            
-            // 设置SMTP信封
+
             let empty_params = Parameters::default();
-            if let Err(e) = client.mail_from(self.config.from.as_str(), &empty_params).await {
+            if let Err(e) = client
+                .mail_from(self.config.from.as_str(), &empty_params)
+                .await
+            {
                 error!("设置发件人失败: {}", e);
                 stats.increment_error("设置发件人失败", file_path);
                 continue;
             }
-
             if let Err(e) = client.rcpt_to(self.config.to.as_str(), &empty_params).await {
                 error!("设置收件人失败: {}", e);
                 stats.increment_error("设置收件人失败", file_path);
                 continue;
             }
-            
-            // 读取附件内容
-            info!("读取文件: {}", file_path);
+
             let attachment_content = match fs::read(file_path) {
                 Ok(content) => content,
                 Err(e) => {
@@ -187,29 +192,21 @@ impl Mailer {
                     continue;
                 }
             };
-            
-            // 构建邮件
+
             let mut builder = MessageBuilder::new()
                 .from(("", self.config.from.as_str()))
                 .to(self.config.to.as_str())
                 .subject(&subject)
                 .text_body(&text_content);
-
-            // 添加HTML内容（如果有）
             if let Some(html) = &html_content {
                 builder = builder.html_body(html);
             }
-
-            // 添加附件
-            // 获取文件的MIME类型
-            let mime_type = match infer::get_from_path(file_path) {
-                Ok(Some(kind)) => kind.mime_type(),
-                _ => "application/octet-stream",
-            };
-
+            let mime_type = infer::get_from_path(file_path)
+                .ok()
+                .flatten()
+                .map_or("application/octet-stream", |k| k.mime_type());
             builder = builder.attachment(mime_type, &filename, &attachment_content[..]);
 
-            // 生成邮件内容
             let mail_content = match builder.write_to_vec() {
                 Ok(content) => content,
                 Err(e) => {
@@ -219,77 +216,159 @@ impl Mailer {
                 }
             };
 
-            // 发送邮件
-            info!("发送附件邮件: {}", filename);
             match timeout(
                 Duration::from_secs(self.config.smtp_timeout),
                 client.data(&mail_content),
-            ).await {
-                Ok(result) => match result {
-                    Ok(_) => {
-                        info!("附件邮件发送成功！ 文件: {}", filename);
-                        stats.email_count += 1;
-                        stats.send_durations.push(send_start.elapsed());
-                    }
-                    Err(e) => {
-                        error!("邮件发送失败: {}, 文件: {}", e, file_path);
-                        stats.increment_error(&format!("邮件发送失败: {}", e), file_path);
-                    }
-                },
+            )
+            .await
+            {
+                Ok(Ok(_)) => {
+                    info!("附件邮件发送成功！ 文件: {}", filename);
+                    stats.email_count += 1;
+                    stats.send_durations.push(send_start.elapsed());
+                }
+                Ok(Err(e)) => {
+                    error!("邮件发送失败: {}, 文件: {}", e, file_path);
+                    stats.increment_error(&format!("邮件发送失败: {}", e), file_path);
+                }
                 Err(_) => {
                     error!("邮件发送超时, 文件: {}", file_path);
                     stats.increment_error("邮件发送超时", file_path);
                 }
             }
 
-            // Add delay if configured and not the last email in the directory
-            if self.config.email_send_interval_ms > 0 && (file_idx < files.len() - 1) {
+            if self.config.email_send_interval_ms > 0
+                && (file_idx < files.len() - 1)
+                && running.load(Ordering::SeqCst)
+            {
                 info!(
                     "附件目录模式：等待 {}ms 后发送下一个文件 (当前: {}/{})",
                     self.config.email_send_interval_ms,
                     file_idx + 1,
                     files.len()
                 );
-                let sleep_duration = std::time::Duration::from_millis(self.config.email_send_interval_ms);
-                let running_clone_for_sleep = running.clone(); // Clone Arc for the async block
-
+                let sleep_duration =
+                    std::time::Duration::from_millis(self.config.email_send_interval_ms);
+                let running_clone_for_sleep = running.clone();
                 tokio::select! {
-                    biased; // Prioritize checking the shutdown signal
-                    _ = async {
-                        loop {
-                            if !running_clone_for_sleep.load(Ordering::SeqCst) {
-                                break;
-                            }
-                            // Check shutdown signal periodically
-                            tokio::time::sleep(Duration::from_millis(100)).await;
-                        }
-                    } => {
+                    biased;
+                    _ = async { loop { if !running_clone_for_sleep.load(Ordering::SeqCst) { break; } tokio::time::sleep(Duration::from_millis(100)).await; } } => {
                         warn!("附件目录模式：发送间隔休眠被中断 (文件 {}/{})", file_idx + 1, files.len());
                     }
-                    _ = tokio::time::sleep(sleep_duration) => {
-                        // Sleep finished normally
-                    }
+                    _ = tokio::time::sleep(sleep_duration) => {}
                 }
-                // Re-check running status after select! block, in case sleep was not interrupted but shutdown was requested during very short sleeps.
                 if !running.load(Ordering::SeqCst) {
-                    warn!("附件目录模式：收到中断信号，在间隔后退出 (文件 {}/{})", file_idx + 1, files.len());
-                    break; // Break the loop for sending directory attachments
+                    warn!(
+                        "附件目录模式：收到中断信号，在间隔后退出 (文件 {}/{})",
+                        file_idx + 1,
+                        files.len()
+                    );
+                    break;
                 }
             }
-        } // End of loop for file_path in &files
-        
-        // 关闭连接
+        }
         let _ = client.quit().await;
-        
         stats.total_duration = start.elapsed();
         Ok(stats)
     }
 
-    // 发送附件文件
+    async fn execute_send_logic<T: AsyncRead + AsyncWrite + Unpin + Send>(
+        &self,
+        client: &mut SmtpClient<T>,
+        attachment_path: &str,         // For logging and stats
+        filename: &str,                // For email construction
+        subject: &str,                 // For email construction
+        text_content: &str,            // For email construction
+        html_content: &Option<String>, // For email construction
+        stats: &mut Stats,             // To update stats
+        running: Arc<AtomicBool>,      // To check for cancellation
+    ) -> Result<()> {
+        // Returns Result to indicate if overall send logic had issues, not individual email error
+        if !running.load(Ordering::SeqCst) {
+            warn!("execute_send_logic: 收到中断信号，正在退出...");
+            return Ok(()); // Not an error, but operation stopped
+        }
+
+        let send_start = Instant::now();
+        let empty_params = Parameters::default();
+
+        if let Err(e) = client
+            .mail_from(self.config.from.as_str(), &empty_params)
+            .await
+        {
+            error!("设置发件人失败 for {}: {}", attachment_path, e);
+            stats.increment_error(&format!("设置发件人失败: {}", e), attachment_path);
+            return Ok(()); // Logged error, but function itself completed its attempt
+        }
+
+        if let Err(e) = client.rcpt_to(self.config.to.as_str(), &empty_params).await {
+            error!("设置收件人失败 for {}: {}", attachment_path, e);
+            stats.increment_error(&format!("设置收件人失败: {}", e), attachment_path);
+            return Ok(());
+        }
+
+        let attachment_content = match fs::read(attachment_path) {
+            Ok(content) => content,
+            Err(e) => {
+                error!("读取附件文件失败 for {}: {}", attachment_path, e);
+                stats.increment_error(&format!("读取附件文件失败: {}", e), attachment_path);
+                return Ok(());
+            }
+        };
+
+        let mut builder = MessageBuilder::new()
+            .from(("", self.config.from.as_str()))
+            .to(self.config.to.as_str())
+            .subject(subject)
+            .text_body(text_content);
+
+        if let Some(html) = html_content {
+            builder = builder.html_body(html);
+        }
+
+        let mime_type = infer::get_from_path(attachment_path)
+            .ok()
+            .flatten()
+            .map_or("application/octet-stream", |k| k.mime_type());
+        builder = builder.attachment(mime_type, filename, &attachment_content[..]);
+
+        let mail_content = match builder.write_to_vec() {
+            Ok(content) => content,
+            Err(e) => {
+                error!("生成邮件内容失败 for {}: {}", attachment_path, e);
+                stats.increment_error(&format!("生成邮件内容失败: {}", e), attachment_path);
+                return Ok(());
+            }
+        };
+
+        match timeout(
+            Duration::from_secs(self.config.smtp_timeout),
+            client.data(&mail_content),
+        )
+        .await
+        {
+            Ok(Ok(_)) => {
+                info!("附件邮件发送成功！Path: {}", attachment_path);
+                stats.email_count += 1;
+                stats.send_durations.push(send_start.elapsed());
+            }
+            Ok(Err(e)) => {
+                error!("邮件发送失败 for {}: {}", attachment_path, e);
+                stats.increment_error(&format!("邮件发送失败: {}", e), attachment_path);
+            }
+            Err(_) => {
+                error!("邮件发送超时 for {}", attachment_path);
+                stats.increment_error("邮件发送超时", attachment_path);
+            }
+        }
+        // client.quit() is handled by the caller of execute_send_logic
+        Ok(())
+    }
+
     async fn send_attachment_with_cancel(
-        &self, 
-        attachment_path: &str, 
-        running: Arc<AtomicBool>
+        &self,
+        attachment_path: &str,
+        running: Arc<AtomicBool>,
     ) -> Result<Stats> {
         info!("准备发送附件：{}", attachment_path);
         let mut stats = Stats::new();
@@ -297,135 +376,180 @@ impl Mailer {
 
         if !Path::new(attachment_path).exists() {
             error!("附件文件不存在: {}", attachment_path);
-            return Err(anyhow::anyhow!("附件文件不存在"));
+            stats.increment_error("附件文件不存在", attachment_path); // Record error in stats
+            return Ok(stats); // Return stats with error instead of Err(anyhow!)
         }
 
-        // 获取文件名用于模板替换
         let filename = Self::get_filename(attachment_path);
-        
-        // 准备主题和内容
-        let subject = match &self.config.subject_template {
-            Some(template) => Self::process_template(template, &filename),
-            None => format!("附件: {}", filename),
-        };
-        
-        let text_content = match &self.config.text_template {
-            Some(template) => Self::process_template(template, &filename),
-            None => format!("请查收附件: {}", filename),
-        };
-
-        let html_content = self.config.html_template.as_ref()
+        let subject = self.config.subject_template.as_ref().map_or_else(
+            || format!("附件: {}", filename),
+            |template| Self::process_template(template, &filename),
+        );
+        let text_content = self.config.text_template.as_ref().map_or_else(
+            || format!("请查收附件: {}", filename),
+            |template| Self::process_template(template, &filename),
+        );
+        let html_content = self
+            .config
+            .html_template
+            .as_ref()
             .map(|template| Self::process_template(template, &filename));
 
-        info!("连接SMTP服务器: {}:{}", self.config.smtp_server, self.config.port);
-        let client_result = match timeout(
-            Duration::from_secs(self.config.smtp_timeout),
-            SmtpClientBuilder::new(self.config.smtp_server.as_str(), self.config.port)
-                .connect_plain(),
-        ).await {
-            Ok(result) => result,
-            Err(_) => {
-                error!("SMTP连接超时");
-                stats.increment_error("SMTP连接超时", attachment_path);
-                return Ok(stats);
-            }
-        };
+        info!(
+            "连接SMTP服务器: {}:{}",
+            self.config.smtp_server, self.config.port
+        );
+        let use_tls = self.config.use_tls || self.config.port == 465;
 
-        let mut client = match client_result {
-            Ok(client) => client,
-            Err(e) => {
-                error!("SMTP连接失败: {}", e);
-                stats.increment_error("SMTP连接失败", attachment_path);
-                return Ok(stats);
-            }
-        };
+        // No longer need client_result to be a single variable for different types.
+        // We will handle connection and then call execute_send_logic within each branch.
 
-        if !running.load(Ordering::SeqCst) {
-            warn!("收到中断信号，正在退出...");
-            return Ok(stats);
-        }
-
-        let send_start = Instant::now();
-
-        // 设置SMTP信封
-        let empty_params = Parameters::default();
-        if let Err(e) = client.mail_from(self.config.from.as_str(), &empty_params).await {
-            error!("设置发件人失败: {}", e);
-            stats.increment_error("设置发件人失败", attachment_path);
-            return Ok(stats);
-        }
-
-        if let Err(e) = client.rcpt_to(self.config.to.as_str(), &empty_params).await {
-            error!("设置收件人失败: {}", e);
-            stats.increment_error("设置收件人失败", attachment_path);
-            return Ok(stats);
-        }
-
-        // 读取附件内容
-        let attachment_content = match fs::read(attachment_path) {
-            Ok(content) => content,
-            Err(e) => {
-                error!("读取附件文件失败: {}", e);
-                stats.increment_error("读取附件文件失败", attachment_path);
-                return Ok(stats);
-            }
-        };
-
-        // 构建邮件
-        let mut builder = MessageBuilder::new()
-            .from(("", self.config.from.as_str()))
-            .to(self.config.to.as_str())
-            .subject(&subject)
-            .text_body(&text_content);
-
-        // 添加HTML内容（如果有）
-        if let Some(html) = &html_content {
-            builder = builder.html_body(html);
-        }
-
-        // 添加附件
-        // 获取文件的MIME类型
-        let mime_type = match infer::get_from_path(attachment_path) {
-            Ok(Some(kind)) => kind.mime_type(),
-            _ => "application/octet-stream",
-        };
-
-        builder = builder.attachment(mime_type, &filename, &attachment_content[..]);
-
-        // 生成邮件内容
-        let mail_content = match builder.write_to_vec() {
-            Ok(content) => content,
-            Err(e) => {
-                error!("生成邮件内容失败: {}", e);
-                stats.increment_error("生成邮件内容失败", attachment_path);
-                return Ok(stats);
-            }
-        };
-
-        // 发送邮件
-        match timeout(
-            Duration::from_secs(self.config.smtp_timeout),
-            client.data(&mail_content),
-        ).await {
-            Ok(result) => match result {
-                Ok(_) => {
-                    info!("附件邮件发送成功！");
-                    stats.email_count = 1;
-                    stats.send_durations.push(send_start.elapsed());
+        if self.config.auth_mode {
+            if let (Some(username), Some(password)) = (&self.config.username, &self.config.password)
+            {
+                info!("使用账号登录模式: {}", username);
+                if use_tls {
+                    info!("使用TLS连接 (认证模式)");
+                    let mut client_builder =
+                        SmtpClientBuilder::new(self.config.smtp_server.as_str(), self.config.port)
+                            .credentials((username.as_str(), password.as_str()));
+                    client_builder = if self.config.port == 465 {
+                        client_builder.implicit_tls(true)
+                    } else {
+                        client_builder.implicit_tls(false) // For STARTTLS
+                    };
+                    if self.config.accept_invalid_certs {
+                        client_builder = client_builder.allow_invalid_certs();
+                    }
+                    match timeout(
+                        Duration::from_secs(self.config.smtp_timeout),
+                        client_builder.connect(),
+                    )
+                    .await
+                    {
+                        Ok(Ok(mut client)) => {
+                            // client is SmtpClient<TlsStream<TcpStream>>
+                            let _ = self
+                                .execute_send_logic(
+                                    &mut client,
+                                    attachment_path,
+                                    &filename,
+                                    &subject,
+                                    &text_content,
+                                    &html_content,
+                                    &mut stats,
+                                    running.clone(),
+                                )
+                                .await;
+                            let _ = client.quit().await;
+                        }
+                        Ok(Err(e)) => {
+                            error!("SMTP认证连接失败: {}", e);
+                            stats.increment_error(
+                                &format!("SMTP认证连接失败: {}", e),
+                                attachment_path,
+                            );
+                        }
+                        Err(_) => {
+                            error!("SMTP连接超时 (认证模式)");
+                            stats.increment_error("SMTP连接超时 (认证模式)", attachment_path);
+                        }
+                    }
+                } else {
+                    error!("不支持使用非TLS连接进行账号登录，请设置--use-tls参数或使用465端口");
+                    stats.increment_error("认证失败: 需要TLS连接", attachment_path);
                 }
-                Err(e) => {
-                    error!("邮件发送失败: {}", e);
-                    stats.increment_error("邮件发送失败", attachment_path);
+            } else {
+                error!("账号登录模式启用但缺少用户名或密码");
+                stats.increment_error("认证失败: 缺少用户名或密码", attachment_path);
+            }
+        } else {
+            // Non-authenticated mode
+            let mut client_builder =
+                SmtpClientBuilder::new(self.config.smtp_server.as_str(), self.config.port);
+            if use_tls {
+                info!("使用TLS连接 (非认证模式)");
+                client_builder = if self.config.port == 465 {
+                    client_builder.implicit_tls(true)
+                } else {
+                    client_builder.implicit_tls(false) // For STARTTLS
+                };
+                if self.config.accept_invalid_certs {
+                    client_builder = client_builder.allow_invalid_certs();
                 }
-            },
-            Err(_) => {
-                error!("邮件发送超时");
-                stats.increment_error("邮件发送超时", attachment_path);
+                match timeout(
+                    Duration::from_secs(self.config.smtp_timeout),
+                    client_builder.connect(),
+                )
+                .await
+                {
+                    Ok(Ok(mut client)) => {
+                        // client is SmtpClient<TlsStream<TcpStream>>
+                        let _ = self
+                            .execute_send_logic(
+                                &mut client,
+                                attachment_path,
+                                &filename,
+                                &subject,
+                                &text_content,
+                                &html_content,
+                                &mut stats,
+                                running.clone(),
+                            )
+                            .await;
+                        let _ = client.quit().await;
+                    }
+                    Ok(Err(e)) => {
+                        error!("SMTP非认证TLS连接失败: {}", e);
+                        stats.increment_error(
+                            &format!("SMTP非认证TLS连接失败: {}", e),
+                            attachment_path,
+                        );
+                    }
+                    Err(_) => {
+                        error!("SMTP连接超时 (非认证TLS)");
+                        stats.increment_error("SMTP连接超时 (非认证TLS)", attachment_path);
+                    }
+                }
+            } else {
+                // Plain connection
+                info!("使用Plain连接 (非认证模式)");
+                match timeout(
+                    Duration::from_secs(self.config.smtp_timeout),
+                    client_builder.connect_plain(),
+                )
+                .await
+                {
+                    Ok(Ok(mut client)) => {
+                        // client is SmtpClient<TcpStream>
+                        let _ = self
+                            .execute_send_logic(
+                                &mut client,
+                                attachment_path,
+                                &filename,
+                                &subject,
+                                &text_content,
+                                &html_content,
+                                &mut stats,
+                                running.clone(),
+                            )
+                            .await;
+                        let _ = client.quit().await;
+                    }
+                    Ok(Err(e)) => {
+                        error!("SMTP非认证Plain连接失败: {}", e);
+                        stats.increment_error(
+                            &format!("SMTP非认证Plain连接失败: {}", e),
+                            attachment_path,
+                        );
+                    }
+                    Err(_) => {
+                        error!("SMTP连接超时 (非认证Plain)");
+                        stats.increment_error("SMTP连接超时 (非认证Plain)", attachment_path);
+                    }
+                }
             }
         }
-
-        // 关闭连接
-        let _ = client.quit().await;
 
         stats.total_duration = start.elapsed();
         Ok(stats)
@@ -449,8 +573,14 @@ impl Mailer {
 
             let handle = task::spawn(async move {
                 let mut group_stats = (0, Vec::new(), Vec::new(), Vec::new());
-                let mut current_batch = Vec::new();
+                let mut current_batch = Vec::new(); // Correctly declared here
+
+                // For non-auth mode with connection reuse (client_opt)
+                // We will stick to SmtpClient<tokio::net::TcpStream> for client_opt.
+                // If TLS is needed in non-auth mode, we won't reuse client_opt; new connection per batch.
                 let mut client_opt: Option<SmtpClient<tokio::net::TcpStream>> = None;
+
+                let use_tls = config.use_tls || config.port == 465;
 
                 for (j, file) in chunk.iter().enumerate() {
                     if !running.load(Ordering::SeqCst) {
@@ -469,114 +599,262 @@ impl Mailer {
                             current_batch.len()
                         );
 
-                        // 如果没有活动连接，创建一个新的
-                        if client_opt.is_none() {
-                            info!("连接SMTP服务器: {}:{}", config.smtp_server, config.port);
-                            let client_result = match timeout(
-                                Duration::from_secs(config.smtp_timeout),
-                                SmtpClientBuilder::new(config.smtp_server.as_str(), config.port)
-                                    .connect_plain(),
-                            )
-                            .await
+                        if config.auth_mode {
+                            client_opt = None; // Ensure no reuse from a previous non-auth iteration
+                            if let (Some(username), Some(password)) =
+                                (&config.username, &config.password)
                             {
-                                Ok(result) => result,
-                                Err(_) => {
-                                    error!("SMTP连接超时");
-                                    for file in &current_batch {
-                                        group_stats
-                                            .3
-                                            .push(("SMTP连接超时".to_string(), file.clone()));
+                                if use_tls {
+                                    let mut client_builder = SmtpClientBuilder::new(
+                                        config.smtp_server.as_str(),
+                                        config.port,
+                                    )
+                                    .credentials((username.as_str(), password.as_str()));
+                                    client_builder = if config.port == 465 {
+                                        client_builder.implicit_tls(true)
+                                    } else {
+                                        client_builder.implicit_tls(false)
+                                    };
+                                    if config.accept_invalid_certs {
+                                        client_builder = client_builder.allow_invalid_certs();
                                     }
-                                    current_batch.clear();
-                                    continue;
-                                }
-                            };
 
-                            match client_result {
-                                Ok(client) => {
-                                    client_opt = Some(client);
-                                }
-                                Err(e) => {
-                                    error!("SMTP连接失败: {}", e);
-                                    for file in &current_batch {
-                                        group_stats
-                                            .3
-                                            .push(("SMTP连接失败".to_string(), file.clone()));
-                                    }
-                                    current_batch.clear();
-                                    continue;
-                                }
-                            }
-                        }
-
-                        if let Some(ref mut client) = client_opt {
-                            match Self::send_batch_emails(&config, &current_batch, client).await {
-                                Ok(results) => {
-                                    for (parse_duration, send_duration) in results {
-                                        group_stats.0 += 1;
-                                        group_stats.1.push(parse_duration);
-                                        group_stats.2.push(send_duration);
-                                    }
-                                }
-                                Err(e) => {
-                                    error!("批量发送失败: {}", e);
-                                    for file in &current_batch {
-                                        group_stats.3.push((e.to_string(), file.clone()));
-                                    }
-                                    // 连接可能已经损坏，重置连接
-                                    client_opt = None;
-                                }
-                            }
-                        }
-
-                        current_batch.clear();
-
-                        // DELAY LOGIC for send_fixed_mode_with_cancel (EML sending)
-                        // This delay occurs after a batch has been processed by this worker.
-                        // If batch_size is 1, this is effectively after every email.
-                        // Condition: config.email_send_interval_ms > 0 AND not the last file processed by this worker's CHUNK.
-                        // 'j' is the index of the file *just processed* or added to the batch that was just processed.
-                        if config.email_send_interval_ms > 0 && j < chunk.len() - 1 {
-                            info!(
-                                "进程组 {}：批处理完成 (处理到文件索引 {}). 等待 {}ms 后处理下一批/文件.",
-                                i + 1, // Process group ID
-                                j,     // Index of the last file included in the processed batch within the current chunk
-                                config.email_send_interval_ms
-                            );
-                            let sleep_duration = std::time::Duration::from_millis(config.email_send_interval_ms);
-                            let running_clone_for_sleep = running.clone(); // Clone Arc for the async block
-
-                            tokio::select! {
-                                biased; // Prioritize checking the shutdown signal
-                                _ = async {
-                                    loop {
-                                        if !running_clone_for_sleep.load(Ordering::SeqCst) {
-                                            break;
+                                    match timeout(
+                                        Duration::from_secs(config.smtp_timeout),
+                                        client_builder.connect(),
+                                    )
+                                    .await
+                                    {
+                                        Ok(Ok(mut client)) => {
+                                            // client is SmtpClient<TlsStream<TcpStream>>
+                                            if let Err(e) = Self::process_batch_with_tls_client(
+                                                &config,
+                                                &current_batch,
+                                                &mut client,
+                                                &mut group_stats,
+                                                i + 1,
+                                                running.clone(),
+                                            )
+                                            .await
+                                            {
+                                                error!("进程组 {}: TLS批量发送失败: {}", i + 1, e);
+                                                for file_path_in_batch in &current_batch {
+                                                    group_stats.3.push((
+                                                        format!("TLS批量处理错误: {}", e),
+                                                        file_path_in_batch.clone(),
+                                                    ));
+                                                }
+                                            }
+                                            let _ = client.quit().await;
                                         }
-                                        // Check shutdown signal periodically
-                                        tokio::time::sleep(Duration::from_millis(100)).await;
+                                        Ok(Err(e)) => {
+                                            error!("进程组 {}: SMTP认证连接失败: {}", i + 1, e);
+                                            for file_path_in_batch in &current_batch {
+                                                group_stats.3.push((
+                                                    "SMTP认证连接失败".to_string(),
+                                                    file_path_in_batch.clone(),
+                                                ));
+                                            }
+                                        }
+                                        Err(_) => {
+                                            error!("进程组 {}: SMTP认证连接超时", i + 1);
+                                            for file_path_in_batch in &current_batch {
+                                                group_stats.3.push((
+                                                    "SMTP认证连接超时".to_string(),
+                                                    file_path_in_batch.clone(),
+                                                ));
+                                            }
+                                        }
                                     }
-                                } => {
-                                    warn!("进程组 {}：发送间隔休眠被中断 (j={})", i + 1, j);
+                                } else {
+                                    error!("进程组 {}: 认证模式不支持非TLS连接.", i + 1);
+                                    for file_path_in_batch in &current_batch {
+                                        group_stats.3.push((
+                                            "认证失败: 需要TLS".to_string(),
+                                            file_path_in_batch.clone(),
+                                        ));
+                                    }
                                 }
-                                _ = tokio::time::sleep(sleep_duration) => {
-                                    // Sleep finished normally
+                            } else {
+                                error!("进程组 {}: 认证模式缺少用户名或密码.", i + 1);
+                                for file_path_in_batch in &current_batch {
+                                    group_stats.3.push((
+                                        "认证失败: 凭证不完整".to_string(),
+                                        file_path_in_batch.clone(),
+                                    ));
                                 }
                             }
-                            // Re-check running status after select! block
+                        } else {
+                            // Non-authenticated mode
+                            if use_tls {
+                                // Non-auth + TLS: no client_opt reuse, new connection per batch
+                                client_opt = None;
+                                info!("进程组 {}: 非认证模式，使用TLS连接 (无持久化)", i + 1);
+                                let mut client_builder = SmtpClientBuilder::new(
+                                    config.smtp_server.as_str(),
+                                    config.port,
+                                );
+                                client_builder = if config.port == 465 {
+                                    client_builder.implicit_tls(true)
+                                } else {
+                                    client_builder.implicit_tls(false)
+                                };
+                                if config.accept_invalid_certs {
+                                    client_builder = client_builder.allow_invalid_certs();
+                                }
+
+                                match timeout(
+                                    Duration::from_secs(config.smtp_timeout),
+                                    client_builder.connect(),
+                                )
+                                .await
+                                {
+                                    Ok(Ok(mut client)) => {
+                                        // client is SmtpClient<TlsStream<TcpStream>>
+                                        // process_batch_with_tls_client is generic enough for SmtpClient<TlsStream<TcpStream>>
+                                        if let Err(e) = Self::process_batch_with_tls_client(
+                                            &config,
+                                            &current_batch,
+                                            &mut client,
+                                            &mut group_stats,
+                                            i + 1,
+                                            running.clone(),
+                                        )
+                                        .await
+                                        {
+                                            error!(
+                                                "进程组 {}: 非认证TLS批量发送失败: {}",
+                                                i + 1,
+                                                e
+                                            );
+                                            for file_path_in_batch in &current_batch {
+                                                group_stats.3.push((
+                                                    format!("非认证TLS批量处理错误: {}", e),
+                                                    file_path_in_batch.clone(),
+                                                ));
+                                            }
+                                        }
+                                        let _ = client.quit().await;
+                                    }
+                                    Ok(Err(e)) => {
+                                        error!("进程组 {}: SMTP非认证TLS连接失败: {}", i + 1, e);
+                                        for file_path_in_batch in &current_batch {
+                                            group_stats.3.push((
+                                                "SMTP非认证TLS连接失败".to_string(),
+                                                file_path_in_batch.clone(),
+                                            ));
+                                        }
+                                    }
+                                    Err(_) => {
+                                        error!("进程组 {}: SMTP非认证TLS连接超时", i + 1);
+                                        for file_path_in_batch in &current_batch {
+                                            group_stats.3.push((
+                                                "SMTP非认证TLS连接超时".to_string(),
+                                                file_path_in_batch.clone(),
+                                            ));
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Non-auth + Plain: use client_opt for potential reuse
+                                if client_opt.is_none() {
+                                    info!(
+                                        "进程组 {}: 连接SMTP服务器: {}:{} (非认证模式, Plain)",
+                                        i + 1,
+                                        config.smtp_server,
+                                        config.port
+                                    );
+                                    let client_builder = SmtpClientBuilder::new(
+                                        config.smtp_server.as_str(),
+                                        config.port,
+                                    );
+                                    match timeout(
+                                        Duration::from_secs(config.smtp_timeout),
+                                        client_builder.connect_plain(),
+                                    )
+                                    .await
+                                    {
+                                        Ok(Ok(client)) => client_opt = Some(client),
+                                        Ok(Err(e)) => {
+                                            error!(
+                                                "进程组 {}: SMTP连接失败 (非认证Plain): {}",
+                                                i + 1,
+                                                e
+                                            );
+                                            for file_path_in_batch in &current_batch {
+                                                group_stats.3.push((
+                                                    "SMTP连接失败Plain".to_string(),
+                                                    file_path_in_batch.clone(),
+                                                ));
+                                            }
+                                        }
+                                        Err(_) => {
+                                            error!("进程组 {}: SMTP连接超时 (非认证Plain).", i + 1);
+                                            for file_path_in_batch in &current_batch {
+                                                group_stats.3.push((
+                                                    "SMTP连接超时Plain".to_string(),
+                                                    file_path_in_batch.clone(),
+                                                ));
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if let Some(ref mut client) = client_opt {
+                                    // client is SmtpClient<TcpStream>
+                                    let (successes, failures) = Self::send_batch_emails(
+                                        &config,
+                                        &current_batch,
+                                        client,
+                                        running.clone(),
+                                    )
+                                    .await;
+                                    group_stats.0 += successes.len();
+                                    group_stats.1.extend(successes.iter().map(|(pd, _)| *pd));
+                                    group_stats.2.extend(successes.iter().map(|(_, sd)| *sd));
+                                    for (error_message, file_path_string) in failures {
+                                        group_stats.3.push((error_message, file_path_string));
+                                    }
+                                } else {
+                                    info!(
+                                        "进程组 {} (非认证Plain): SMTP连接不可用，跳过当前批次发送",
+                                        i + 1
+                                    );
+                                }
+                            }
+                        }
+                        current_batch.clear();
+                        if config.email_send_interval_ms > 0
+                            && j < chunk.len() - 1
+                            && running.load(Ordering::SeqCst)
+                        {
+                            info!(
+                                "进程组 {}: 批处理尝试完毕。等待 {}ms (当前文件索引 {}/{})",
+                                i + 1,
+                                config.email_send_interval_ms,
+                                j + 1,
+                                chunk.len()
+                            );
+                            let sleep_duration =
+                                std::time::Duration::from_millis(config.email_send_interval_ms);
+                            let running_clone_for_sleep = running.clone();
+                            tokio::select! {
+                                biased;
+                                _ = async { loop { if !running_clone_for_sleep.load(Ordering::SeqCst) { break; } tokio::time::sleep(Duration::from_millis(100)).await; } } => { warn!("进程组 {}: 任务间隔休眠被中断 (文件 {}/{})", i + 1, j + 1, chunk.len()); }
+                                _ = tokio::time::sleep(sleep_duration) => {}
+                            }
                             if !running.load(Ordering::SeqCst) {
-                                warn!("进程组 {} 收到中断信号，在间隔后退出 (j={})", i + 1, j);
-                                break; // Break the outer loop for this worker
+                                warn!(
+                                    "进程组 {}: 收到中断信号，在任务间隔后退出 (文件 {}/{})",
+                                    i + 1,
+                                    j + 1,
+                                    chunk.len()
+                                );
+                                break;
                             }
                         }
                     }
                 }
-
-                // 关闭SMTP连接
-                if let Some(client) = client_opt {
-                    let _ = client.quit().await;
-                }
-
                 info!("进程组 {} 完成", i + 1);
                 group_stats
             });
@@ -594,17 +872,13 @@ impl Mailer {
                 }
             }
         }
-
         stats.email_count = total_sent;
         stats.total_duration = start.elapsed();
-
         Ok(())
     }
 
     fn collect_email_files(&self) -> Result<Vec<String>> {
         let mut files = Vec::new();
-        
-        // 检查dir是否存在
         let dir = match &self.config.dir {
             Some(dir_path) => dir_path,
             None => {
@@ -612,13 +886,8 @@ impl Mailer {
                 return Ok(files);
             }
         };
-        
         info!("开始扫描目录: {}", dir);
-
-        for entry in WalkDir::new(dir)
-            .into_iter()
-            .filter_map(|e| e.ok())
-        {
+        for entry in WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
             if entry.file_type().is_file() {
                 if let Some(ext) = entry.path().extension() {
                     if ext.to_string_lossy() == self.config.extension {
@@ -629,7 +898,6 @@ impl Mailer {
                 }
             }
         }
-
         info!("共找到 {} 个邮件文件", files.len());
         Ok(files)
     }
@@ -638,152 +906,438 @@ impl Mailer {
         config: &Config,
         files: &[String],
         client: &mut SmtpClient<T>,
-    ) -> Result<Vec<(Duration, Duration)>> {
-        let mut results = Vec::new();
-        // 如果启用邮箱匿名化，创建匿名器
+        running: Arc<AtomicBool>,
+    ) -> (Vec<(Duration, Duration)>, Vec<(String, String)>) {
+        let mut successes = Vec::new();
+        let mut failures = Vec::new();
         let mut anonymizer = if config.anonymize_emails {
             Some(EmailAnonymizer::new(&config.anonymize_domain))
         } else {
             None
         };
 
-        for file_path in files {
-            info!("读取文件: {}", file_path);
-            let parse_start = Instant::now();
-            let mut content = fs::read(file_path)?;
-
-            // 如果启用了邮箱匿名化，处理内容
-            if let Some(anonymizer) = anonymizer.as_mut() {
-                info!("对邮件内容进行邮箱匿名化处理");
-                content = anonymizer.anonymize_binary(&content);
+        for (email_idx, file_path) in files.iter().enumerate() {
+            if !running.load(Ordering::SeqCst) {
+                warn!("send_batch_emails: 收到中断信号，正在退出批处理...");
+                break;
             }
+            let mut had_error_this_email = false;
+            let mut current_file_parse_duration: Option<Duration> = None;
+            let parse_start = Instant::now();
+            let content_read_result = fs::read(file_path);
 
-            info!("解析邮件内容");
-            let message = match MessageParser::default().parse(&content) {
-                Some(msg) => msg,
-                None => {
-                    error!("无法解析邮件文件: {}", file_path);
-                    return Err(anyhow::anyhow!("无法解析邮件文件"));
+            let content = match content_read_result {
+                Ok(c) => {
+                    current_file_parse_duration = Some(parse_start.elapsed());
+                    if let Some(anonymizer_ref) = anonymizer.as_mut() {
+                        info!("对邮件内容进行邮箱匿名化处理: {}", file_path);
+                        anonymizer_ref.anonymize_binary(&c)
+                    } else {
+                        c
+                    }
+                }
+                Err(e) => {
+                    error!("读取文件 {} 失败: {}", file_path, e);
+                    failures.push((format!("读取文件失败: {}", e), file_path.to_string()));
+                    had_error_this_email = true;
+                    Vec::new()
                 }
             };
-            let parse_duration = parse_start.elapsed();
 
-            let send_start = Instant::now();
-
-            // 创建空参数对象
-            let empty_params = Parameters::default();
-
-            if config.keep_headers {
-                // 使用原始邮件头 - 保留所有原始邮件头
-                info!("使用原始邮件头发送邮件");
-
-                // 设置SMTP信封发件人和收件人
-                if let Err(e) = client.mail_from(config.from.as_str(), &empty_params).await {
-                    return Err(anyhow::anyhow!("设置发件人失败: {}", e));
-                }
-
-                if let Err(e) = client.rcpt_to(config.to.as_str(), &empty_params).await {
-                    return Err(anyhow::anyhow!("设置收件人失败: {}", e));
-                }
-
-                // 发送原始邮件内容
-                match timeout(
-                    Duration::from_secs(config.smtp_timeout),
-                    client.data(&content),
-                )
-                .await
-                {
-                    Ok(result) => match result {
-                        Ok(_) => {
-                            info!("邮件发送成功！");
-                            results.push((parse_duration, send_start.elapsed()));
-                        }
-                        Err(e) => return Err(anyhow::anyhow!("邮件发送失败: {}", e)),
-                    },
-                    Err(_) => return Err(anyhow::anyhow!("邮件发送超时")),
-                }
-            } else if config.modify_headers {
-                // 修改邮件头中的From和To
-                info!("修改邮件头并发送邮件");
-
-                // 使用提取的内容构建新邮件
-                let subject = message.subject().unwrap_or("No Subject").to_string();
-                let text_content = message.body_text(0).unwrap_or_default().to_string();
-                let html_content = message.body_html(0).map(|s| s.to_string());
-
-                // 构建新的邮件内容
-                let builder = MessageBuilder::new()
-                    .from(("", config.from.as_str()))
-                    .to(config.to.as_str())
-                    .subject(&subject)
-                    .text_body(&text_content);
-
-                let builder = if let Some(html) = &html_content {
-                    builder.html_body(html)
-                } else {
-                    builder
+            if !had_error_this_email {
+                let parse_duration_final =
+                    current_file_parse_duration.unwrap_or_else(|| parse_start.elapsed());
+                let message = match MessageParser::default().parse(&content) {
+                    Some(msg) => msg,
+                    None => {
+                        error!("无法解析邮件文件: {}", file_path);
+                        failures.push(("无法解析邮件文件".to_string(), file_path.to_string()));
+                        had_error_this_email = true;
+                        // Provide a dummy Message if parsing fails to avoid further panics, though it won't be used.
+                        MessageParser::default().parse(b"Subject: error").unwrap()
+                    }
                 };
 
-                // 生成邮件内容
-                let mail_content = builder.write_to_vec()?;
+                if !had_error_this_email {
+                    let send_start = Instant::now();
+                    let empty_params = Parameters::default();
+                    let mut email_send_op_failed = false;
 
-                // 设置SMTP信封发件人和收件人
-                if let Err(e) = client.mail_from(config.from.as_str(), &empty_params).await {
-                    return Err(anyhow::anyhow!("设置发件人失败: {}", e));
-                }
-
-                if let Err(e) = client.rcpt_to(config.to.as_str(), &empty_params).await {
-                    return Err(anyhow::anyhow!("设置收件人失败: {}", e));
-                }
-
-                // 发送生成的邮件内容
-                match timeout(
-                    Duration::from_secs(config.smtp_timeout),
-                    client.data(&mail_content),
-                )
-                .await
-                {
-                    Ok(result) => match result {
-                        Ok(_) => {
-                            info!("邮件发送成功！");
-                            results.push((parse_duration, send_start.elapsed()));
+                    if let Err(e) = client.mail_from(config.from.as_str(), &empty_params).await {
+                        error!("设置发件人失败 for {}: {}", file_path, e);
+                        failures.push((format!("设置发件人失败: {}", e), file_path.to_string()));
+                        email_send_op_failed = true;
+                    }
+                    if !email_send_op_failed {
+                        if let Err(e) = client.rcpt_to(config.to.as_str(), &empty_params).await {
+                            error!("设置收件人失败 for {}: {}", file_path, e);
+                            failures
+                                .push((format!("设置收件人失败: {}", e), file_path.to_string()));
+                            email_send_op_failed = true;
                         }
-                        Err(e) => return Err(anyhow::anyhow!("邮件发送失败: {}", e)),
-                    },
-                    Err(_) => return Err(anyhow::anyhow!("邮件发送超时")),
-                }
-            } else {
-                // 保留原始邮件头，使用SMTP信封传递
-                info!("保留原始邮件头并发送邮件");
+                    }
 
-                // 设置SMTP信封发件人和收件人
-                if let Err(e) = client.mail_from(config.from.as_str(), &empty_params).await {
-                    return Err(anyhow::anyhow!("设置发件人失败: {}", e));
-                }
+                    if !email_send_op_failed {
+                        let mail_data_to_send = if config.keep_headers {
+                            info!("使用原始邮件头发送邮件: {}", file_path);
+                            content.clone()
+                        } else if config.modify_headers {
+                            info!("修改邮件头并发送邮件: {}", file_path);
+                            let subject = message.subject().unwrap_or("No Subject").to_string();
+                            let text_content = message.body_text(0).unwrap_or_default().to_string();
+                            let html_content = message.body_html(0).map(|s| s.to_string());
+                            let mut builder = MessageBuilder::new()
+                                .from(("", config.from.as_str()))
+                                .to(config.to.as_str())
+                                .subject(&subject)
+                                .text_body(&text_content);
+                            if let Some(html) = &html_content {
+                                builder = builder.html_body(html);
+                            }
+                            match builder.write_to_vec() {
+                                Ok(m_content) => m_content,
+                                Err(e) => {
+                                    error!("构建邮件内容失败 for {}: {}", file_path, e);
+                                    failures.push((
+                                        format!("构建邮件内容失败: {}", e),
+                                        file_path.to_string(),
+                                    ));
+                                    email_send_op_failed = true;
+                                    Vec::new()
+                                }
+                            }
+                        } else {
+                            info!("解析EML并使用命令行参数设置邮件头: {}", file_path);
+                            let subject = message.subject().unwrap_or("No Subject").to_string();
+                            let text_content = message.body_text(0).unwrap_or_default().to_string();
+                            let html_content = message.body_html(0).map(|s| s.to_string());
+                            let mut builder = MessageBuilder::new()
+                                .from(("", config.from.as_str()))
+                                .to(config.to.as_str())
+                                .subject(&subject)
+                                .text_body(&text_content);
+                            if let Some(html) = &html_content {
+                                builder = builder.html_body(html);
+                            }
+                            match builder.write_to_vec() {
+                                Ok(m_content) => m_content,
+                                Err(e) => {
+                                    error!("构建邮件内容失败 (默认模式) for {}: {}", file_path, e);
+                                    failures.push((
+                                        format!("构建邮件内容失败 (默认模式): {}", e),
+                                        file_path.to_string(),
+                                    ));
+                                    email_send_op_failed = true;
+                                    Vec::new()
+                                }
+                            }
+                        };
 
-                if let Err(e) = client.rcpt_to(config.to.as_str(), &empty_params).await {
-                    return Err(anyhow::anyhow!("设置收件人失败: {}", e));
-                }
-
-                // 发送原始邮件内容
-                match timeout(
-                    Duration::from_secs(config.smtp_timeout),
-                    client.data(&content),
-                )
-                .await
-                {
-                    Ok(result) => match result {
-                        Ok(_) => {
-                            info!("邮件发送成功！");
-                            results.push((parse_duration, send_start.elapsed()));
+                        if !email_send_op_failed {
+                            match timeout(
+                                Duration::from_secs(config.smtp_timeout),
+                                client.data(&mail_data_to_send),
+                            )
+                            .await
+                            {
+                                Ok(Ok(_)) => {
+                                    info!("邮件发送成功！: {}", file_path);
+                                    successes.push((parse_duration_final, send_start.elapsed()));
+                                }
+                                Ok(Err(e)) => {
+                                    error!("邮件发送失败 for file {}: {}", file_path, e);
+                                    failures.push((
+                                        format!("邮件发送失败: {}", e),
+                                        file_path.to_string(),
+                                    ));
+                                }
+                                Err(_) => {
+                                    error!("邮件发送超时 for file: {}", file_path);
+                                    failures
+                                        .push(("邮件发送超时".to_string(), file_path.to_string()));
+                                }
+                            }
                         }
-                        Err(e) => return Err(anyhow::anyhow!("邮件发送失败: {}", e)),
-                    },
-                    Err(_) => return Err(anyhow::anyhow!("邮件发送超时")),
+                    }
+                }
+            }
+
+            if config.email_send_interval_ms > 0
+                && email_idx < files.len() - 1
+                && running.load(Ordering::SeqCst)
+            {
+                info!(
+                    "send_batch_emails: 等待 {}ms 后发送下一封邮件 (当前批次中邮件索引: {}/{})",
+                    config.email_send_interval_ms,
+                    email_idx + 1,
+                    files.len()
+                );
+                let sleep_duration =
+                    std::time::Duration::from_millis(config.email_send_interval_ms);
+                let running_clone_for_sleep = running.clone();
+                tokio::select! {
+                    biased;
+                    _ = async { loop { if !running_clone_for_sleep.load(Ordering::SeqCst) { break; } tokio::time::sleep(Duration::from_millis(100)).await; } } => {
+                        warn!("send_batch_emails: 邮件发送间隔休眠被中断 (批次邮件 {}/{})", email_idx + 1, files.len());
+                    }
+                    _ = tokio::time::sleep(sleep_duration) => {}
+                }
+                if !running.load(Ordering::SeqCst) {
+                    warn!(
+                        "send_batch_emails: 收到中断信号，在邮件间隔后退出批处理 (批次邮件 {}/{})",
+                        email_idx + 1,
+                        files.len()
+                    );
+                    break;
                 }
             }
         }
+        (successes, failures)
+    }
 
-        Ok(results)
+    async fn process_batch_with_tls_client<S: AsyncRead + AsyncWrite + Unpin + Send>(
+        config: &Config,
+        files: &[String],
+        client: &mut SmtpClient<S>,
+        group_stats: &mut (usize, Vec<Duration>, Vec<Duration>, Vec<(String, String)>),
+        process_group_id: usize,
+        running: Arc<AtomicBool>,
+    ) -> Result<()> {
+        let mut anonymizer = if config.anonymize_emails {
+            Some(EmailAnonymizer::new(&config.anonymize_domain))
+        } else {
+            None
+        };
+
+        for (email_idx, file_path) in files.iter().enumerate() {
+            if !running.load(Ordering::SeqCst) {
+                warn!(
+                    "进程组 {}: process_batch_with_tls_client: 收到中断信号，正在退出批处理...",
+                    process_group_id
+                );
+                break;
+            }
+            let mut had_error_this_email = false;
+            let mut current_file_parse_duration: Option<Duration> = None;
+            let parse_start = Instant::now();
+            let content_read_result = fs::read(file_path);
+
+            let content = match content_read_result {
+                Ok(c) => {
+                    current_file_parse_duration = Some(parse_start.elapsed());
+                    if let Some(anonymizer_ref) = anonymizer.as_mut() {
+                        info!(
+                            "进程组 {}: 对邮件内容进行邮箱匿名化处理: {}",
+                            process_group_id, file_path
+                        );
+                        anonymizer_ref.anonymize_binary(&c)
+                    } else {
+                        c
+                    }
+                }
+                Err(e) => {
+                    error!(
+                        "进程组 {}: 读取文件 {} 失败: {}",
+                        process_group_id, file_path, e
+                    );
+                    group_stats
+                        .3
+                        .push((format!("读取文件失败: {}", e), file_path.to_string()));
+                    had_error_this_email = true;
+                    Vec::new()
+                }
+            };
+
+            if !had_error_this_email {
+                let parse_duration_final =
+                    current_file_parse_duration.unwrap_or_else(|| parse_start.elapsed());
+                let message = match MessageParser::default().parse(&content) {
+                    Some(msg) => msg,
+                    None => {
+                        error!(
+                            "进程组 {}: 无法解析邮件文件: {}",
+                            process_group_id, file_path
+                        );
+                        group_stats
+                            .3
+                            .push(("无法解析邮件文件".to_string(), file_path.to_string()));
+                        had_error_this_email = true;
+                        MessageParser::default().parse(b"Subject: error").unwrap()
+                    }
+                };
+
+                if !had_error_this_email {
+                    let send_start = Instant::now();
+                    let empty_params = Parameters::default();
+                    let mut email_send_op_failed = false;
+
+                    if let Err(e) = client.mail_from(config.from.as_str(), &empty_params).await {
+                        error!(
+                            "进程组 {}: 设置发件人失败 for {}: {}",
+                            process_group_id, file_path, e
+                        );
+                        group_stats
+                            .3
+                            .push((format!("设置发件人失败: {}", e), file_path.to_string()));
+                        email_send_op_failed = true;
+                    }
+                    if !email_send_op_failed {
+                        if let Err(e) = client.rcpt_to(config.to.as_str(), &empty_params).await {
+                            error!(
+                                "进程组 {}: 设置收件人失败 for {}: {}",
+                                process_group_id, file_path, e
+                            );
+                            group_stats
+                                .3
+                                .push((format!("设置收件人失败: {}", e), file_path.to_string()));
+                            email_send_op_failed = true;
+                        }
+                    }
+
+                    if !email_send_op_failed {
+                        let mail_data_to_send = if config.keep_headers {
+                            info!(
+                                "进程组 {}: 使用原始邮件头发送邮件: {}",
+                                process_group_id, file_path
+                            );
+                            content.clone()
+                        } else if config.modify_headers {
+                            info!(
+                                "进程组 {}: 修改邮件头并发送邮件: {}",
+                                process_group_id, file_path
+                            );
+                            let subject = message.subject().unwrap_or("No Subject").to_string();
+                            let text_content = message.body_text(0).unwrap_or_default().to_string();
+                            let html_content = message.body_html(0).map(|s| s.to_string());
+                            let mut builder = MessageBuilder::new()
+                                .from(("", config.from.as_str()))
+                                .to(config.to.as_str())
+                                .subject(&subject)
+                                .text_body(&text_content);
+                            if let Some(html) = &html_content {
+                                builder = builder.html_body(html);
+                            }
+                            match builder.write_to_vec() {
+                                Ok(m_content) => m_content,
+                                Err(e) => {
+                                    error!(
+                                        "进程组 {}: 构建邮件内容失败 for {}: {}",
+                                        process_group_id, file_path, e
+                                    );
+                                    group_stats.3.push((
+                                        format!("构建邮件内容失败: {}", e),
+                                        file_path.to_string(),
+                                    ));
+                                    email_send_op_failed = true;
+                                    Vec::new()
+                                }
+                            }
+                        } else {
+                            info!(
+                                "进程组 {}: 解析EML并使用命令行参数设置邮件头: {}",
+                                process_group_id, file_path
+                            );
+                            let subject = message.subject().unwrap_or("No Subject").to_string();
+                            let text_content = message.body_text(0).unwrap_or_default().to_string();
+                            let html_content = message.body_html(0).map(|s| s.to_string());
+                            let mut builder = MessageBuilder::new()
+                                .from(("", config.from.as_str()))
+                                .to(config.to.as_str())
+                                .subject(&subject)
+                                .text_body(&text_content);
+                            if let Some(html) = &html_content {
+                                builder = builder.html_body(html);
+                            }
+                            match builder.write_to_vec() {
+                                Ok(m_content) => m_content,
+                                Err(e) => {
+                                    error!(
+                                        "进程组 {}: 构建邮件内容失败 (默认模式) for {}: {}",
+                                        process_group_id, file_path, e
+                                    );
+                                    group_stats.3.push((
+                                        format!("构建邮件内容失败 (默认模式): {}", e),
+                                        file_path.to_string(),
+                                    ));
+                                    email_send_op_failed = true;
+                                    Vec::new()
+                                }
+                            }
+                        };
+
+                        if !email_send_op_failed {
+                            match timeout(
+                                Duration::from_secs(config.smtp_timeout),
+                                client.data(&mail_data_to_send),
+                            )
+                            .await
+                            {
+                                Ok(Ok(_)) => {
+                                    info!(
+                                        "进程组 {}: 邮件发送成功！: {}",
+                                        process_group_id, file_path
+                                    );
+                                    group_stats.0 += 1;
+                                    group_stats.1.push(parse_duration_final);
+                                    group_stats.2.push(send_start.elapsed());
+                                }
+                                Ok(Err(e)) => {
+                                    error!(
+                                        "进程组 {}: 邮件发送失败 for file {}: {}",
+                                        process_group_id, file_path, e
+                                    );
+                                    group_stats.3.push((
+                                        format!("邮件发送失败: {}", e),
+                                        file_path.to_string(),
+                                    ));
+                                }
+                                Err(_) => {
+                                    error!(
+                                        "进程组 {}: 邮件发送超时 for file: {}",
+                                        process_group_id, file_path
+                                    );
+                                    group_stats
+                                        .3
+                                        .push(("邮件发送超时".to_string(), file_path.to_string()));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if config.email_send_interval_ms > 0
+                && email_idx < files.len() - 1
+                && running.load(Ordering::SeqCst)
+            {
+                info!(
+                    "进程组 {}: 等待 {}ms 后发送下一封邮件 (当前批次中邮件索引: {}/{})",
+                    process_group_id,
+                    config.email_send_interval_ms,
+                    email_idx + 1,
+                    files.len()
+                );
+                let sleep_duration =
+                    std::time::Duration::from_millis(config.email_send_interval_ms);
+                let running_clone_for_sleep = running.clone();
+                tokio::select! {
+                    biased;
+                    _ = async { loop { if !running_clone_for_sleep.load(Ordering::SeqCst) { break; } tokio::time::sleep(Duration::from_millis(100)).await; } } => {
+                        warn!("进程组 {}: 邮件发送间隔休眠被中断 (批次邮件 {}/{})", process_group_id, email_idx + 1, files.len());
+                    }
+                    _ = tokio::time::sleep(sleep_duration) => {}
+                }
+                if !running.load(Ordering::SeqCst) {
+                    warn!(
+                        "进程组 {}: 收到中断信号，在邮件间隔后退出批处理 (批次邮件 {}/{})",
+                        process_group_id,
+                        email_idx + 1,
+                        files.len()
+                    );
+                    break;
+                }
+            }
+        }
+        Ok(())
     }
 }

@@ -77,6 +77,14 @@ docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp_server> -
 - `--text-template`: Text content template, supports {filename} variable (default: "Please find the attached file: {filename}")
 - `--html-template`: HTML content template, supports {filename} variable
 - `--email-send-interval`: Interval in milliseconds between sending each email in a batch (default: 0)
+- `--auth-mode`: Enable email account authentication mode
+- `--username`: Email account username (required when auth-mode is enabled)
+- `--password`: Email account password (required when auth-mode is enabled)
+- `--use-tls`: Use TLS encryption for SMTP connection (auto-enabled when port is 465)
+- `--email-send-interval-ms`: Milliseconds to wait after each email processing batch (or after each file processing attempt if batch size is 1) is completed. This delay applies after connection failures, authentication failures, or email send successes/failures. Default is 0 (no wait).
+- `--smtp-timeout`: Timeout in seconds for SMTP operations. Default is 60.
+- `--use-tls`: If set, try to use TLS (STARTTLS) for SMTP connection (port 25 or 587). Implicit TLS is always used for port 465.
+- `--accept-invalid-certs`: (TLS only) Accept invalid TLS certificates (e.g., self-signed). WARNING: This reduces security; use only if you trust the target server.
 
 ## Logging Levels
 

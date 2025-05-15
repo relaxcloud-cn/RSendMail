@@ -93,6 +93,14 @@ docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp服务器>
 - `--text-template`: 文本内容模板，支持变量{filename}（默认："请查收附件: {filename}"）
 - `--html-template`: HTML内容模板，支持变量{filename}
 - `--email-send-interval`: 批量发送时，每封邮件之间的发送间隔（毫秒，默认为0）
+- `--auth-mode`: 启用邮箱账号登录模式（通过用户名和密码验证发送邮件）
+- `--username`: 邮箱账号用户名（在auth-mode启用时必需）
+- `--password`: 邮箱账号密码（在auth-mode启用时必需）
+- `--use-tls`: 使用TLS加密连接（当端口为465时自动启用）
+- `--email-send-interval-ms`: 每个邮件处理批次（当批次大小为1时，即每个文件处理尝试）完成后的等待毫秒数。这在连接失败、认证失败或邮件发送失败/成功后都会生效。默认值为0（无等待）。
+- `--smtp-timeout`: SMTP操作的超时时间（秒）。默认值为60。
+- `--use-tls`: 如果设置，将尝试使用TLS (STARTTLS) 连接SMTP服务器（25或587端口）。如果端口是465，则总是使用隐式TLS。
+- `--accept-invalid-certs`: 接受无效的TLS证书（仅当使用TLS时）。警告：这会降低安全性，请仅在信任目标服务器时使用。
 
 ## 日志级别
 

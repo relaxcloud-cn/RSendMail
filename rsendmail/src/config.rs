@@ -68,11 +68,11 @@ pub struct Config {
     /// 重复发送次数
     #[arg(long, default_value_t = 1)]
     pub repeat: u32,
-    
+
     /// 循环发送的间隔时间（秒）
     #[arg(long, default_value_t = 1)]
     pub loop_interval: u64,
-    
+
     /// 发送失败后重试的间隔时间（秒）
     #[arg(long, default_value_t = 5)]
     pub retry_interval: u64,
@@ -80,7 +80,7 @@ pub struct Config {
     /// 附件文件路径，用于发送普通文件作为附件
     #[arg(long)]
     pub attachment: Option<String>,
-    
+
     /// 附件目录路径，发送目录下所有文件为单独的邮件
     #[arg(long)]
     pub attachment_dir: Option<String>,
@@ -97,8 +97,33 @@ pub struct Config {
     #[arg(long)]
     pub html_template: Option<String>,
 
-    #[arg(long, value_parser, default_value_t = 0, help = "Interval in milliseconds between sending each email in a batch.")]
+    #[arg(
+        long,
+        value_parser,
+        default_value_t = 0,
+        help = "Interval in milliseconds between sending each email in a batch."
+    )]
     pub email_send_interval_ms: u64,
+
+    /// 是否使用邮箱账号登录模式（通过用户名和密码验证发送邮件）
+    #[arg(long, default_value_t = false)]
+    pub auth_mode: bool,
+
+    /// 邮箱账号用户名（仅在auth_mode=true时需要）
+    #[arg(long)]
+    pub username: Option<String>,
+
+    /// 邮箱账号密码（仅在auth_mode=true时需要）
+    #[arg(long)]
+    pub password: Option<String>,
+
+    /// 使用TLS加密连接 (为了兼容大多数SMTP服务器，当端口是465时将自动启用)
+    #[arg(long, default_value_t = false)]
+    pub use_tls: bool,
+
+    /// 是否接受无效的证书
+    #[arg(long, default_value_t = false)]
+    pub accept_invalid_certs: bool,
 }
 
 #[derive(Debug, PartialEq)]
