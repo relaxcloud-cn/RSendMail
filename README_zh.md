@@ -53,7 +53,7 @@ docker build -t rsendmail .
 
 ### Windows 使用
 从 [Releases](https://github.com/kpassy/RSendMail/releases) 页面下载Windows可执行文件（`rsendmail-windows-x86_64.exe`）。
-```
+```bash
 rsendmail-windows-x86_64.exe --smtp-server <smtp服务器> --port <端口> --from <发件人> --to <收件人> --dir <邮件目录> --processes <进程数> --batch-size <批处理大小>
 ```
 
@@ -92,6 +92,7 @@ docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp服务器>
 - `--subject-template`: 主题模板，支持变量{filename}（默认："附件: {filename}"）
 - `--text-template`: 文本内容模板，支持变量{filename}（默认："请查收附件: {filename}"）
 - `--html-template`: HTML内容模板，支持变量{filename}
+- `--email-send-interval`: 批量发送时，每封邮件之间的发送间隔（毫秒，默认为0）
 
 ## 日志级别
 

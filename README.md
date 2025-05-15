@@ -76,6 +76,7 @@ docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp_server> -
 - `--subject-template`: Subject template, supports {filename} variable (default: "Attachment: {filename}")
 - `--text-template`: Text content template, supports {filename} variable (default: "Please find the attached file: {filename}")
 - `--html-template`: HTML content template, supports {filename} variable
+- `--email-send-interval`: Interval in milliseconds between sending each email in a batch (default: 0)
 
 ## Logging Levels
 

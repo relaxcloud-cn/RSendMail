@@ -96,6 +96,9 @@ pub struct Config {
     /// HTML内容模板，支持变量 {filename}
     #[arg(long)]
     pub html_template: Option<String>,
+
+    #[arg(long, value_parser, default_value_t = 0, help = "Interval in milliseconds between sending each email in a batch.")]
+    pub email_send_interval_ms: u64,
 }
 
 #[derive(Debug, PartialEq)]

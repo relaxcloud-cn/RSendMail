@@ -16,6 +16,7 @@ use walkdir::WalkDir;
 use crate::anonymizer::EmailAnonymizer;
 use crate::config::Config;
 use crate::stats::Stats;
+use mail_send::mail_builder::MessageBuilder;
 
 pub struct Mailer {
     config: Config,
@@ -137,7 +138,7 @@ impl Mailer {
         };
         
         // 逐个发送每个文件
-        for file_path in &files {
+        for (file_idx, file_path) in files.iter().enumerate() {
             if !running.load(Ordering::SeqCst) {
                 warn!("收到中断信号，正在退出...");
                 break;
@@ -188,7 +189,6 @@ impl Mailer {
             };
             
             // 构建邮件
-            use mail_send::mail_builder::MessageBuilder;
             let mut builder = MessageBuilder::new()
                 .from(("", self.config.from.as_str()))
                 .to(self.config.to.as_str())
@@ -227,22 +227,56 @@ impl Mailer {
             ).await {
                 Ok(result) => match result {
                     Ok(_) => {
-                        info!("附件邮件发送成功！");
+                        info!("附件邮件发送成功！ 文件: {}", filename);
                         stats.email_count += 1;
-                        stats.parse_durations.push(Duration::from_secs(0)); // 没有解析过程
                         stats.send_durations.push(send_start.elapsed());
                     }
                     Err(e) => {
-                        error!("邮件发送失败: {}", e);
-                        stats.increment_error("邮件发送失败", file_path);
+                        error!("邮件发送失败: {}, 文件: {}", e, file_path);
+                        stats.increment_error(&format!("邮件发送失败: {}", e), file_path);
                     }
                 },
                 Err(_) => {
-                    error!("邮件发送超时");
+                    error!("邮件发送超时, 文件: {}", file_path);
                     stats.increment_error("邮件发送超时", file_path);
                 }
             }
-        }
+
+            // Add delay if configured and not the last email in the directory
+            if self.config.email_send_interval_ms > 0 && (file_idx < files.len() - 1) {
+                info!(
+                    "附件目录模式：等待 {}ms 后发送下一个文件 (当前: {}/{})",
+                    self.config.email_send_interval_ms,
+                    file_idx + 1,
+                    files.len()
+                );
+                let sleep_duration = std::time::Duration::from_millis(self.config.email_send_interval_ms);
+                let running_clone_for_sleep = running.clone(); // Clone Arc for the async block
+
+                tokio::select! {
+                    biased; // Prioritize checking the shutdown signal
+                    _ = async {
+                        loop {
+                            if !running_clone_for_sleep.load(Ordering::SeqCst) {
+                                break;
+                            }
+                            // Check shutdown signal periodically
+                            tokio::time::sleep(Duration::from_millis(100)).await;
+                        }
+                    } => {
+                        warn!("附件目录模式：发送间隔休眠被中断 (文件 {}/{})", file_idx + 1, files.len());
+                    }
+                    _ = tokio::time::sleep(sleep_duration) => {
+                        // Sleep finished normally
+                    }
+                }
+                // Re-check running status after select! block, in case sleep was not interrupted but shutdown was requested during very short sleeps.
+                if !running.load(Ordering::SeqCst) {
+                    warn!("附件目录模式：收到中断信号，在间隔后退出 (文件 {}/{})", file_idx + 1, files.len());
+                    break; // Break the loop for sending directory attachments
+                }
+            }
+        } // End of loop for file_path in &files
         
         // 关闭连接
         let _ = client.quit().await;
@@ -338,7 +372,6 @@ impl Mailer {
         };
 
         // 构建邮件
-        use mail_send::mail_builder::MessageBuilder;
         let mut builder = MessageBuilder::new()
             .from(("", self.config.from.as_str()))
             .to(self.config.to.as_str())
@@ -378,7 +411,6 @@ impl Mailer {
                 Ok(_) => {
                     info!("附件邮件发送成功！");
                     stats.email_count = 1;
-                    stats.parse_durations.push(Duration::from_secs(0)); // 没有解析过程
                     stats.send_durations.push(send_start.elapsed());
                 }
                 Err(e) => {
@@ -498,6 +530,45 @@ impl Mailer {
                         }
 
                         current_batch.clear();
+
+                        // DELAY LOGIC for send_fixed_mode_with_cancel (EML sending)
+                        // This delay occurs after a batch has been processed by this worker.
+                        // If batch_size is 1, this is effectively after every email.
+                        // Condition: config.email_send_interval_ms > 0 AND not the last file processed by this worker's CHUNK.
+                        // 'j' is the index of the file *just processed* or added to the batch that was just processed.
+                        if config.email_send_interval_ms > 0 && j < chunk.len() - 1 {
+                            info!(
+                                "进程组 {}：批处理完成 (处理到文件索引 {}). 等待 {}ms 后处理下一批/文件.",
+                                i + 1, // Process group ID
+                                j,     // Index of the last file included in the processed batch within the current chunk
+                                config.email_send_interval_ms
+                            );
+                            let sleep_duration = std::time::Duration::from_millis(config.email_send_interval_ms);
+                            let running_clone_for_sleep = running.clone(); // Clone Arc for the async block
+
+                            tokio::select! {
+                                biased; // Prioritize checking the shutdown signal
+                                _ = async {
+                                    loop {
+                                        if !running_clone_for_sleep.load(Ordering::SeqCst) {
+                                            break;
+                                        }
+                                        // Check shutdown signal periodically
+                                        tokio::time::sleep(Duration::from_millis(100)).await;
+                                    }
+                                } => {
+                                    warn!("进程组 {}：发送间隔休眠被中断 (j={})", i + 1, j);
+                                }
+                                _ = tokio::time::sleep(sleep_duration) => {
+                                    // Sleep finished normally
+                                }
+                            }
+                            // Re-check running status after select! block
+                            if !running.load(Ordering::SeqCst) {
+                                warn!("进程组 {} 收到中断信号，在间隔后退出 (j={})", i + 1, j);
+                                break; // Break the outer loop for this worker
+                            }
+                        }
                     }
                 }
 
@@ -641,7 +712,6 @@ impl Mailer {
                 let html_content = message.body_html(0).map(|s| s.to_string());
 
                 // 构建新的邮件内容
-                use mail_send::mail_builder::MessageBuilder;
                 let builder = MessageBuilder::new()
                     .from(("", config.from.as_str()))
                     .to(config.to.as_str())
