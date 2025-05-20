@@ -17,7 +17,7 @@ pub struct Config {
     #[arg(long)]
     pub from: String,
 
-    /// 收件人邮箱地址
+    /// 收件人邮箱地址 (多个地址请用逗号分隔)
     #[arg(long)]
     pub to: String,
 

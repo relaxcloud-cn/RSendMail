@@ -72,7 +72,7 @@ docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp服务器>
 - `--smtp-server`: SMTP 服务器地址
 - `--port`: SMTP 服务器端口（默认：25）
 - `--from`: 发件人邮箱地址（用于SMTP信封，默认不修改邮件内容）
-- `--to`: 收件人邮箱地址（用于SMTP信封，默认不修改邮件内容）
+- `--to`: 收件人邮箱地址（用于SMTP信封，多个地址请用逗号分隔，默认不修改邮件内容）
 - `--dir`: 邮件文件所在目录（仅在使用EML发送模式时需要，使用--attachment或--attachment-dir时不需要）
 - `--extension`: 邮件文件扩展名（默认：eml）
 - `--processes`: 进程数，auto表示自动设置为CPU核心数，或者指定具体数字（默认：auto）

@@ -178,9 +178,49 @@ impl Mailer {
                 stats.increment_error("设置发件人失败", file_path);
                 continue;
             }
-            if let Err(e) = client.rcpt_to(self.config.to.as_str(), &empty_params).await {
-                error!("设置收件人失败: {}", e);
-                stats.increment_error("设置收件人失败", file_path);
+
+            let recipients_str = self.config.to.as_str();
+            let recipients: Vec<&str> = recipients_str
+                .split(',')
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .collect();
+
+            if recipients.is_empty() {
+                error!(
+                    "附件目录模式：没有有效的收件人地址 for {}: {}",
+                    file_path, recipients_str
+                );
+                stats.increment_error("没有有效的收件人地址", file_path);
+                continue;
+            }
+
+            let mut any_rcpt_succeeded = false;
+            for recipient in &recipients {
+                if let Err(e) = client.rcpt_to(recipient, &empty_params).await {
+                    error!(
+                        "附件目录模式：设置收件人 {} 失败 for {}: {}",
+                        recipient, file_path, e
+                    );
+                    stats.increment_error(
+                        &format!("设置收件人 {} 失败: {}", recipient, e),
+                        file_path,
+                    );
+                } else {
+                    info!(
+                        "附件目录模式：设置收件人 {} 成功 for {}",
+                        recipient, file_path
+                    );
+                    any_rcpt_succeeded = true;
+                }
+            }
+
+            if !any_rcpt_succeeded {
+                error!(
+                    "附件目录模式：所有收件人均设置失败，跳过邮件发送 for {}",
+                    file_path
+                );
+                // Errors already incremented per recipient
                 continue;
             }
 
@@ -195,7 +235,7 @@ impl Mailer {
 
             let mut builder = MessageBuilder::new()
                 .from(("", self.config.from.as_str()))
-                .to(self.config.to.as_str())
+                .to(recipients) // Pass Vec<&str>
                 .subject(&subject)
                 .text_body(&text_content);
             if let Some(html) = &html_content {
@@ -301,9 +341,43 @@ impl Mailer {
             return Ok(()); // Logged error, but function itself completed its attempt
         }
 
-        if let Err(e) = client.rcpt_to(self.config.to.as_str(), &empty_params).await {
-            error!("设置收件人失败 for {}: {}", attachment_path, e);
-            stats.increment_error(&format!("设置收件人失败: {}", e), attachment_path);
+        let recipients: Vec<&str> = self
+            .config
+            .to
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        if recipients.is_empty() {
+            error!(
+                "没有有效的收件人地址 for {}: {}",
+                attachment_path, self.config.to
+            );
+            stats.increment_error("没有有效的收件人地址", attachment_path);
+            return Ok(());
+        }
+
+        let mut any_rcpt_succeeded = false;
+        for recipient in &recipients {
+            if let Err(e) = client.rcpt_to(recipient, &empty_params).await {
+                error!(
+                    "设置收件人 {} 失败 for {}: {}",
+                    recipient, attachment_path, e
+                );
+                stats.increment_error(
+                    &format!("设置收件人 {} 失败: {}", recipient, e),
+                    attachment_path,
+                );
+            } else {
+                info!("设置收件人 {} 成功 for {}", recipient, attachment_path);
+                any_rcpt_succeeded = true;
+            }
+        }
+
+        if !any_rcpt_succeeded {
+            error!("所有收件人均设置失败，跳过邮件发送 for {}", attachment_path);
+            // increment_error is already done per recipient
             return Ok(());
         }
 
@@ -318,7 +392,7 @@ impl Mailer {
 
         let mut builder = MessageBuilder::new()
             .from(("", self.config.from.as_str()))
-            .to(self.config.to.as_str())
+            .to(recipients) // Pass Vec<&str>
             .subject(subject)
             .text_body(text_content);
 
@@ -564,13 +638,13 @@ impl Mailer {
     ) -> Result<()> {
         let start = Instant::now();
         let chunk_size = (files.len() + num_processes - 1) / num_processes;
-
+        
         let mut handles = vec![];
         for (i, chunk) in files.chunks(chunk_size).enumerate() {
             let chunk = chunk.to_vec();
             let config = self.config.clone();
             let running = running.clone();
-
+            
             let handle = task::spawn(async move {
                 let mut group_stats = (0, Vec::new(), Vec::new(), Vec::new());
                 let mut current_batch = Vec::new(); // Correctly declared here
@@ -589,7 +663,7 @@ impl Mailer {
                     }
 
                     current_batch.push(file.clone());
-
+                    
                     if current_batch.len() >= config.batch_size || j == chunk.len() - 1 {
                         info!(
                             "进程组 {} 开始发送第 {}/{} 批，包含 {} 封邮件",
@@ -656,7 +730,7 @@ impl Mailer {
                                                 ));
                                             }
                                         }
-                                        Err(_) => {
+                                Err(_) => {
                                             error!("进程组 {}: SMTP认证连接超时", i + 1);
                                             for file_path_in_batch in &current_batch {
                                                 group_stats.3.push((
@@ -916,6 +990,22 @@ impl Mailer {
             None
         };
 
+        let base_recipients_str = config.to.as_str();
+        let base_recipients: Vec<&str> = base_recipients_str
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        if base_recipients.is_empty() {
+            warn!(
+                "全局收件人地址 (config.to) 为空或无效: {}",
+                base_recipients_str
+            );
+            // If global 'to' is empty, all emails in this batch will fail for missing recipients.
+            // We'll add an error for each file to reflect this in the loop if needed.
+        }
+
         for (email_idx, file_path) in files.iter().enumerate() {
             if !running.load(Ordering::SeqCst) {
                 warn!("send_batch_emails: 收到中断信号，正在退出批处理...");
@@ -924,6 +1014,11 @@ impl Mailer {
             let mut had_error_this_email = false;
             let mut current_file_parse_duration: Option<Duration> = None;
             let parse_start = Instant::now();
+
+            // current_recipients will be the same as base_recipients for this function's scope
+            // as it's not modified per email file here.
+            let current_recipients = base_recipients.clone();
+
             let content_read_result = fs::read(file_path);
 
             let content = match content_read_result {
@@ -940,21 +1035,21 @@ impl Mailer {
                     error!("读取文件 {} 失败: {}", file_path, e);
                     failures.push((format!("读取文件失败: {}", e), file_path.to_string()));
                     had_error_this_email = true;
-                    Vec::new()
+                    Vec::new() // dummy content
                 }
             };
 
             if !had_error_this_email {
                 let parse_duration_final =
                     current_file_parse_duration.unwrap_or_else(|| parse_start.elapsed());
-                let message = match MessageParser::default().parse(&content) {
-                    Some(msg) => msg,
-                    None => {
-                        error!("无法解析邮件文件: {}", file_path);
+            let message = match MessageParser::default().parse(&content) {
+                Some(msg) => msg,
+                None => {
+                    error!("无法解析邮件文件: {}", file_path);
                         failures.push(("无法解析邮件文件".to_string(), file_path.to_string()));
                         had_error_this_email = true;
-                        // Provide a dummy Message if parsing fails to avoid further panics, though it won't be used.
                         MessageParser::default().parse(b"Subject: error").unwrap()
+                        // dummy message
                     }
                 };
 
@@ -963,16 +1058,54 @@ impl Mailer {
                     let empty_params = Parameters::default();
                     let mut email_send_op_failed = false;
 
-                    if let Err(e) = client.mail_from(config.from.as_str(), &empty_params).await {
-                        error!("设置发件人失败 for {}: {}", file_path, e);
-                        failures.push((format!("设置发件人失败: {}", e), file_path.to_string()));
+                    if current_recipients.is_empty() {
+                        // This check is important if base_recipients could be empty
+                        error!(
+                            "send_batch_emails: 没有有效的收件人地址 for {}: {}",
+                            file_path, config.to
+                        );
+                        failures.push((
+                            format!("没有有效的收件人地址: {}", config.to),
+                            file_path.to_string(),
+                        ));
                         email_send_op_failed = true;
                     }
+
                     if !email_send_op_failed {
-                        if let Err(e) = client.rcpt_to(config.to.as_str(), &empty_params).await {
-                            error!("设置收件人失败 for {}: {}", file_path, e);
+                        if let Err(e) = client.mail_from(config.from.as_str(), &empty_params).await
+                        {
+                            error!("send_batch_emails: 设置发件人失败 for {}: {}", file_path, e);
                             failures
-                                .push((format!("设置收件人失败: {}", e), file_path.to_string()));
+                                .push((format!("设置发件人失败: {}", e), file_path.to_string()));
+                            email_send_op_failed = true;
+                        }
+                    }
+
+                    if !email_send_op_failed {
+                        let mut any_rcpt_succeeded = false;
+                        for recipient in &current_recipients {
+                            if let Err(e) = client.rcpt_to(recipient, &empty_params).await {
+                                error!(
+                                    "send_batch_emails: 设置收件人 {} 失败 for {}: {}",
+                                    recipient, file_path, e
+                                );
+                                failures.push((
+                                    format!("设置收件人 {} 失败: {}", recipient, e),
+                                    file_path.to_string(),
+                                ));
+                            } else {
+                                info!(
+                                    "send_batch_emails: 设置收件人 {} 成功 for {}",
+                                    recipient, file_path
+                                );
+                                any_rcpt_succeeded = true;
+                            }
+                        }
+                        if !any_rcpt_succeeded && !current_recipients.is_empty() {
+                            error!(
+                                "send_batch_emails: 所有收件人均设置失败，跳过邮件发送 for {}",
+                                file_path
+                            );
                             email_send_op_failed = true;
                         }
                     }
@@ -983,15 +1116,15 @@ impl Mailer {
                             content.clone()
                         } else if config.modify_headers {
                             info!("修改邮件头并发送邮件: {}", file_path);
-                            let subject = message.subject().unwrap_or("No Subject").to_string();
-                            let text_content = message.body_text(0).unwrap_or_default().to_string();
-                            let html_content = message.body_html(0).map(|s| s.to_string());
+            let subject = message.subject().unwrap_or("No Subject").to_string();
+            let text_content = message.body_text(0).unwrap_or_default().to_string();
+            let html_content = message.body_html(0).map(|s| s.to_string());
                             let mut builder = MessageBuilder::new()
-                                .from(("", config.from.as_str()))
-                                .to(config.to.as_str())
-                                .subject(&subject)
-                                .text_body(&text_content);
-                            if let Some(html) = &html_content {
+                    .from(("", config.from.as_str()))
+                                .to(current_recipients.clone())
+                    .subject(&subject)
+                    .text_body(&text_content);
+                if let Some(html) = &html_content {
                                 builder = builder.html_body(html);
                             }
                             match builder.write_to_vec() {
@@ -1013,7 +1146,7 @@ impl Mailer {
                             let html_content = message.body_html(0).map(|s| s.to_string());
                             let mut builder = MessageBuilder::new()
                                 .from(("", config.from.as_str()))
-                                .to(config.to.as_str())
+                                .to(current_recipients.clone())
                                 .subject(&subject)
                                 .text_body(&text_content);
                             if let Some(html) = &html_content {
@@ -1109,6 +1242,22 @@ impl Mailer {
             None
         };
 
+        let base_recipients_str = config.to.as_str();
+        let base_recipients: Vec<&str> = base_recipients_str
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        if base_recipients.is_empty() {
+            warn!(
+                "进程组 {}: 全局收件人地址 (config.to) 为空或无效: {}",
+                process_group_id, base_recipients_str
+            );
+            // If global 'to' is empty, all emails in this batch will fail for missing recipients.
+            // We'll add an error for each file to reflect this in the loop if needed.
+        }
+
         for (email_idx, file_path) in files.iter().enumerate() {
             if !running.load(Ordering::SeqCst) {
                 warn!(
@@ -1120,6 +1269,9 @@ impl Mailer {
             let mut had_error_this_email = false;
             let mut current_file_parse_duration: Option<Duration> = None;
             let parse_start = Instant::now();
+
+            let current_recipients = base_recipients.clone();
+
             let content_read_result = fs::read(file_path);
 
             let content = match content_read_result {
@@ -1167,29 +1319,61 @@ impl Mailer {
                 };
 
                 if !had_error_this_email {
-                    let send_start = Instant::now();
+            let send_start = Instant::now();
                     let empty_params = Parameters::default();
                     let mut email_send_op_failed = false;
 
-                    if let Err(e) = client.mail_from(config.from.as_str(), &empty_params).await {
+                    if current_recipients.is_empty() {
                         error!(
-                            "进程组 {}: 设置发件人失败 for {}: {}",
-                            process_group_id, file_path, e
+                            "进程组 {}: 没有有效的收件人地址 for {}: {}",
+                            process_group_id, file_path, config.to
                         );
-                        group_stats
-                            .3
-                            .push((format!("设置发件人失败: {}", e), file_path.to_string()));
+                        group_stats.3.push((
+                            format!("没有有效的收件人地址: {}", config.to),
+                            file_path.to_string(),
+                        ));
                         email_send_op_failed = true;
                     }
+
                     if !email_send_op_failed {
-                        if let Err(e) = client.rcpt_to(config.to.as_str(), &empty_params).await {
+                        if let Err(e) = client.mail_from(config.from.as_str(), &empty_params).await
+                        {
                             error!(
-                                "进程组 {}: 设置收件人失败 for {}: {}",
+                                "进程组 {}: 设置发件人失败 for {}: {}",
                                 process_group_id, file_path, e
                             );
                             group_stats
                                 .3
-                                .push((format!("设置收件人失败: {}", e), file_path.to_string()));
+                                .push((format!("设置发件人失败: {}", e), file_path.to_string()));
+                            email_send_op_failed = true;
+                        }
+                    }
+
+                    if !email_send_op_failed {
+                        let mut any_rcpt_succeeded = false;
+                        for recipient in &current_recipients {
+                            if let Err(e) = client.rcpt_to(recipient, &empty_params).await {
+                                error!(
+                                    "进程组 {}: 设置收件人 {} 失败 for {}: {}",
+                                    process_group_id, recipient, file_path, e
+                                );
+                                group_stats.3.push((
+                                    format!("设置收件人 {} 失败: {}", recipient, e),
+                                    file_path.to_string(),
+                                ));
+                            } else {
+                                info!(
+                                    "进程组 {}: 设置收件人 {} 成功 for {}",
+                                    process_group_id, recipient, file_path
+                                );
+                                any_rcpt_succeeded = true;
+                            }
+                        }
+                        if !any_rcpt_succeeded && !current_recipients.is_empty() {
+                            error!(
+                                "进程组 {}: 所有收件人均设置失败，跳过邮件发送 for {}",
+                                process_group_id, file_path
+                            );
                             email_send_op_failed = true;
                         }
                     }
@@ -1211,7 +1395,7 @@ impl Mailer {
                             let html_content = message.body_html(0).map(|s| s.to_string());
                             let mut builder = MessageBuilder::new()
                                 .from(("", config.from.as_str()))
-                                .to(config.to.as_str())
+                                .to(current_recipients.clone())
                                 .subject(&subject)
                                 .text_body(&text_content);
                             if let Some(html) = &html_content {
@@ -1242,7 +1426,7 @@ impl Mailer {
                             let html_content = message.body_html(0).map(|s| s.to_string());
                             let mut builder = MessageBuilder::new()
                                 .from(("", config.from.as_str()))
-                                .to(config.to.as_str())
+                                .to(current_recipients.clone())
                                 .subject(&subject)
                                 .text_body(&text_content);
                             if let Some(html) = &html_content {

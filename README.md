@@ -56,7 +56,7 @@ docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp_server> -
 - `--smtp-server`: SMTP server address
 - `--port`: SMTP server port (default: 25)
 - `--from`: Sender email address (for SMTP envelope, doesn't modify email content by default)
-- `--to`: Recipient email address (for SMTP envelope, doesn't modify email content by default)
+- `--to`: Recipient email address(es) (for SMTP envelope, comma-separated for multiple recipients, doesn't modify email content by default)
 - `--dir`: Directory containing email files (only required when sending EML files, not needed when using --attachment or --attachment-dir)
 - `--extension`: Email file extension (default: eml)
 - `--processes`: Number of processes, auto sets to CPU core count, or specify a number (default: auto)
