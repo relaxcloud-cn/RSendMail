@@ -7,6 +7,7 @@
 ![Release](https://img.shields.io/github/v/release/kpassy/RSendMail?color=blue&include_prereleases)
 ![License](https://img.shields.io/github/license/kpassy/RSendMail)
 ![Stars](https://img.shields.io/github/stars/kpassy/RSendMail?style=social)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/relaxcloud-cn/RSendMail)
 
 ## 功能特点
 
