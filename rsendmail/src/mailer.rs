@@ -638,13 +638,13 @@ impl Mailer {
     ) -> Result<()> {
         let start = Instant::now();
         let chunk_size = (files.len() + num_processes - 1) / num_processes;
-        
+
         let mut handles = vec![];
         for (i, chunk) in files.chunks(chunk_size).enumerate() {
             let chunk = chunk.to_vec();
             let config = self.config.clone();
             let running = running.clone();
-            
+
             let handle = task::spawn(async move {
                 let mut group_stats = (0, Vec::new(), Vec::new(), Vec::new());
                 let mut current_batch = Vec::new(); // Correctly declared here
@@ -663,7 +663,7 @@ impl Mailer {
                     }
 
                     current_batch.push(file.clone());
-                    
+
                     if current_batch.len() >= config.batch_size || j == chunk.len() - 1 {
                         info!(
                             "进程组 {} 开始发送第 {}/{} 批，包含 {} 封邮件",
@@ -730,7 +730,7 @@ impl Mailer {
                                                 ));
                                             }
                                         }
-                                Err(_) => {
+                                        Err(_) => {
                                             error!("进程组 {}: SMTP认证连接超时", i + 1);
                                             for file_path_in_batch in &current_batch {
                                                 group_stats.3.push((
@@ -1042,10 +1042,10 @@ impl Mailer {
             if !had_error_this_email {
                 let parse_duration_final =
                     current_file_parse_duration.unwrap_or_else(|| parse_start.elapsed());
-            let message = match MessageParser::default().parse(&content) {
-                Some(msg) => msg,
-                None => {
-                    error!("无法解析邮件文件: {}", file_path);
+                let message = match MessageParser::default().parse(&content) {
+                    Some(msg) => msg,
+                    None => {
+                        error!("无法解析邮件文件: {}", file_path);
                         failures.push(("无法解析邮件文件".to_string(), file_path.to_string()));
                         had_error_this_email = true;
                         MessageParser::default().parse(b"Subject: error").unwrap()
@@ -1116,15 +1116,15 @@ impl Mailer {
                             content.clone()
                         } else if config.modify_headers {
                             info!("修改邮件头并发送邮件: {}", file_path);
-            let subject = message.subject().unwrap_or("No Subject").to_string();
-            let text_content = message.body_text(0).unwrap_or_default().to_string();
-            let html_content = message.body_html(0).map(|s| s.to_string());
+                            let subject = message.subject().unwrap_or("No Subject").to_string();
+                            let text_content = message.body_text(0).unwrap_or_default().to_string();
+                            let html_content = message.body_html(0).map(|s| s.to_string());
                             let mut builder = MessageBuilder::new()
-                    .from(("", config.from.as_str()))
+                                .from(("", config.from.as_str()))
                                 .to(current_recipients.clone())
-                    .subject(&subject)
-                    .text_body(&text_content);
-                if let Some(html) = &html_content {
+                                .subject(&subject)
+                                .text_body(&text_content);
+                            if let Some(html) = &html_content {
                                 builder = builder.html_body(html);
                             }
                             match builder.write_to_vec() {
@@ -1140,30 +1140,9 @@ impl Mailer {
                                 }
                             }
                         } else {
-                            info!("解析EML并使用命令行参数设置邮件头: {}", file_path);
-                            let subject = message.subject().unwrap_or("No Subject").to_string();
-                            let text_content = message.body_text(0).unwrap_or_default().to_string();
-                            let html_content = message.body_html(0).map(|s| s.to_string());
-                            let mut builder = MessageBuilder::new()
-                                .from(("", config.from.as_str()))
-                                .to(current_recipients.clone())
-                                .subject(&subject)
-                                .text_body(&text_content);
-                            if let Some(html) = &html_content {
-                                builder = builder.html_body(html);
-                            }
-                            match builder.write_to_vec() {
-                                Ok(m_content) => m_content,
-                                Err(e) => {
-                                    error!("构建邮件内容失败 (默认模式) for {}: {}", file_path, e);
-                                    failures.push((
-                                        format!("构建邮件内容失败 (默认模式): {}", e),
-                                        file_path.to_string(),
-                                    ));
-                                    email_send_op_failed = true;
-                                    Vec::new()
-                                }
-                            }
+                            // 修复附件丢失问题：在默认模式下也使用原始邮件内容来保持附件和完整的MIME结构
+                            info!("使用原始邮件内容发送（保持附件和MIME结构）: {}", file_path);
+                            content.clone()
                         };
 
                         if !email_send_op_failed {
@@ -1319,7 +1298,7 @@ impl Mailer {
                 };
 
                 if !had_error_this_email {
-            let send_start = Instant::now();
+                    let send_start = Instant::now();
                     let empty_params = Parameters::default();
                     let mut email_send_op_failed = false;
 
@@ -1417,36 +1396,12 @@ impl Mailer {
                                 }
                             }
                         } else {
+                            // 修复附件丢失问题：在默认模式下也使用原始邮件内容来保持附件和完整的MIME结构
                             info!(
-                                "进程组 {}: 解析EML并使用命令行参数设置邮件头: {}",
+                                "进程组 {}: 使用原始邮件内容发送（保持附件和MIME结构）: {}",
                                 process_group_id, file_path
                             );
-                            let subject = message.subject().unwrap_or("No Subject").to_string();
-                            let text_content = message.body_text(0).unwrap_or_default().to_string();
-                            let html_content = message.body_html(0).map(|s| s.to_string());
-                            let mut builder = MessageBuilder::new()
-                                .from(("", config.from.as_str()))
-                                .to(current_recipients.clone())
-                                .subject(&subject)
-                                .text_body(&text_content);
-                            if let Some(html) = &html_content {
-                                builder = builder.html_body(html);
-                            }
-                            match builder.write_to_vec() {
-                                Ok(m_content) => m_content,
-                                Err(e) => {
-                                    error!(
-                                        "进程组 {}: 构建邮件内容失败 (默认模式) for {}: {}",
-                                        process_group_id, file_path, e
-                                    );
-                                    group_stats.3.push((
-                                        format!("构建邮件内容失败 (默认模式): {}", e),
-                                        file_path.to_string(),
-                                    ));
-                                    email_send_op_failed = true;
-                                    Vec::new()
-                                }
-                            }
+                            content.clone()
                         };
 
                         if !email_send_op_failed {
