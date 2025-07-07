@@ -42,7 +42,7 @@ impl Mailer {
 
     pub async fn send_all_with_cancel(&self, running: Arc<AtomicBool>) -> Result<Stats> {
         if let Some(attachment_dir) = &self.config.attachment_dir {
-            info!("检测到附件目录模式：{}", attachment_dir);
+            info!("检测到附件目录模式：}", attachment_dir);
             return self
                 .send_attachment_dir_with_cancel(attachment_dir, running)
                 .await;
