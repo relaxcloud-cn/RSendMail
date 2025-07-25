@@ -883,11 +883,29 @@ impl Mailer {
                                         running.clone(),
                                     )
                                     .await;
+                                    
+                                    // 检查是否有因连接问题导致的失败，如果有则重置连接以供下次使用
+                                    let has_connection_failures = failures.iter().any(|(error_msg, _)| {
+                                        error_msg.contains("Broken pipe") || 
+                                        error_msg.contains("设置发件人失败") || 
+                                        error_msg.contains("连接") ||
+                                        error_msg.contains("超时")
+                                    });
+                                    
                                     group_stats.0 += successes.len();
                                     group_stats.1.extend(successes.iter().map(|(pd, _)| *pd));
                                     group_stats.2.extend(successes.iter().map(|(_, sd)| *sd));
                                     for (error_message, file_path_string) in failures {
                                         group_stats.3.push((error_message, file_path_string));
+                                    }
+                                    
+                                    if has_connection_failures {
+                                        warn!(
+                                            "进程组 {}: 检测到连接问题，将在下个批次重新建立连接",
+                                            i + 1
+                                        );
+                                        // 标记需要重置连接，在批次处理完成后重置
+                                        client_opt = None;
                                     }
                                 } else {
                                     info!(
@@ -1321,10 +1339,21 @@ impl Mailer {
                                 "进程组 {}: 设置发件人失败 for {}: {}",
                                 process_group_id, file_path, e
                             );
-                            group_stats
-                                .3
-                                .push((format!("设置发件人失败: {}", e), file_path.to_string()));
+                            let error_msg = format!("设置发件人失败: {}", e);
+                            group_stats.3.push((error_msg.clone(), file_path.to_string()));
                             email_send_op_failed = true;
+                            
+                            // 如果是连接相关的错误（如Broken pipe），提前退出当前批次
+                            if error_msg.contains("Broken pipe") || 
+                               error_msg.contains("连接") ||
+                               error_msg.contains("timeout") ||
+                               error_msg.contains("超时") {
+                                warn!(
+                                    "进程组 {}: 设置发件人时检测到连接问题，提前退出当前批次: {}",
+                                    process_group_id, error_msg
+                                );
+                                break;
+                            }
                         }
                     }
 
@@ -1425,10 +1454,20 @@ impl Mailer {
                                         "进程组 {}: 邮件发送失败 for file {}: {}",
                                         process_group_id, file_path, e
                                     );
-                                    group_stats.3.push((
-                                        format!("邮件发送失败: {}", e),
-                                        file_path.to_string(),
-                                    ));
+                                    let error_msg = format!("邮件发送失败: {}", e);
+                                    group_stats.3.push((error_msg.clone(), file_path.to_string()));
+                                    
+                                    // 如果是连接相关的错误，提前退出当前批次以避免后续邮件也失败
+                                    if error_msg.contains("Broken pipe") || 
+                                       error_msg.contains("连接") ||
+                                       error_msg.contains("timeout") ||
+                                       error_msg.contains("超时") {
+                                        warn!(
+                                            "进程组 {}: 检测到连接问题，提前退出当前批次: {}",
+                                            process_group_id, error_msg
+                                        );
+                                        break;
+                                    }
                                 }
                                 Err(_) => {
                                     error!(
