@@ -638,13 +638,13 @@ impl Mailer {
     ) -> Result<()> {
         let start = Instant::now();
         let chunk_size = (files.len() + num_processes - 1) / num_processes;
-
+        
         let mut handles = vec![];
         for (i, chunk) in files.chunks(chunk_size).enumerate() {
             let chunk = chunk.to_vec();
             let config = self.config.clone();
             let running = running.clone();
-
+            
             let handle = task::spawn(async move {
                 let mut group_stats = (0, Vec::new(), Vec::new(), Vec::new());
                 let mut current_batch = Vec::new(); // Correctly declared here
@@ -663,7 +663,7 @@ impl Mailer {
                     }
 
                     current_batch.push(file.clone());
-
+                    
                     if current_batch.len() >= config.batch_size || j == chunk.len() - 1 {
                         info!(
                             "进程组 {} 开始发送第 {}/{} 批，包含 {} 封邮件",
@@ -730,7 +730,7 @@ impl Mailer {
                                                 ));
                                             }
                                         }
-                                        Err(_) => {
+                                Err(_) => {
                                             error!("进程组 {}: SMTP认证连接超时", i + 1);
                                             for file_path_in_batch in &current_batch {
                                                 group_stats.3.push((
@@ -876,21 +876,13 @@ impl Mailer {
 
                                 if let Some(ref mut client) = client_opt {
                                     // client is SmtpClient<TcpStream>
-                                    let (successes, failures) = Self::send_batch_emails(
+                                    let (successes, failures, should_reset_connection) = Self::send_batch_emails(
                                         &config,
                                         &current_batch,
                                         client,
                                         running.clone(),
                                     )
                                     .await;
-                                    
-                                    // 检查是否有因连接问题导致的失败，如果有则重置连接以供下次使用
-                                    let has_connection_failures = failures.iter().any(|(error_msg, _)| {
-                                        error_msg.contains("Broken pipe") || 
-                                        error_msg.contains("设置发件人失败") || 
-                                        error_msg.contains("连接") ||
-                                        error_msg.contains("超时")
-                                    });
                                     
                                     group_stats.0 += successes.len();
                                     group_stats.1.extend(successes.iter().map(|(pd, _)| *pd));
@@ -899,12 +891,13 @@ impl Mailer {
                                         group_stats.3.push((error_message, file_path_string));
                                     }
                                     
-                                    if has_connection_failures {
+                                    // 使用函数返回的连接状态标志，立即响应SMTP协议要求
+                                    if should_reset_connection {
                                         warn!(
-                                            "进程组 {}: 检测到连接问题，将在下个批次重新建立连接",
+                                            "进程组 {}: 检测到需要重置连接的SMTP错误（如421），立即重置连接",
                                             i + 1
                                         );
-                                        // 标记需要重置连接，在批次处理完成后重置
+                                        // 立即重置连接，下个批次将重新建立
                                         client_opt = None;
                                     }
                                 } else {
@@ -999,9 +992,10 @@ impl Mailer {
         files: &[String],
         client: &mut SmtpClient<T>,
         running: Arc<AtomicBool>,
-    ) -> (Vec<(Duration, Duration)>, Vec<(String, String)>) {
+    ) -> (Vec<(Duration, Duration)>, Vec<(String, String)>, bool) {
         let mut successes = Vec::new();
         let mut failures = Vec::new();
+        let mut connection_should_reset = false;  // 跟踪连接是否需要重置
         let mut anonymizer = if config.anonymize_emails {
             Some(EmailAnonymizer::new(&config.anonymize_domain))
         } else {
@@ -1060,10 +1054,10 @@ impl Mailer {
             if !had_error_this_email {
                 let parse_duration_final =
                     current_file_parse_duration.unwrap_or_else(|| parse_start.elapsed());
-                let message = match MessageParser::default().parse(&content) {
-                    Some(msg) => msg,
-                    None => {
-                        error!("无法解析邮件文件: {}", file_path);
+            let message = match MessageParser::default().parse(&content) {
+                Some(msg) => msg,
+                None => {
+                    error!("无法解析邮件文件: {}", file_path);
                         failures.push(("无法解析邮件文件".to_string(), file_path.to_string()));
                         had_error_this_email = true;
                         MessageParser::default().parse(b"Subject: error").unwrap()
@@ -1093,9 +1087,24 @@ impl Mailer {
                         if let Err(e) = client.mail_from(config.from.as_str(), &empty_params).await
                         {
                             error!("send_batch_emails: 设置发件人失败 for {}: {}", file_path, e);
-                            failures
-                                .push((format!("设置发件人失败: {}", e), file_path.to_string()));
+                            let error_msg = format!("设置发件人失败: {}", e);
+                            failures.push((error_msg.clone(), file_path.to_string()));
                             email_send_op_failed = true;
+                            
+                            // 检测关键SMTP错误，这些错误表示服务器要求断开连接
+                            if error_msg.contains("421") ||  // Service not available, closing transmission channel
+                               error_msg.contains("Cannot accept further commands") ||
+                               error_msg.contains("Broken pipe") ||
+                               error_msg.contains("Connection reset") ||
+                               error_msg.contains("Unparseable SMTP reply") { // 连接已损坏的信号
+                                warn!(
+                                    "send_batch_emails: 检测到需要重置连接的SMTP错误: {}",
+                                    error_msg
+                                );
+                                connection_should_reset = true;
+                                // 立即退出当前批次，避免更多无效尝试
+                                break;
+                            }
                         }
                     }
 
@@ -1134,15 +1143,15 @@ impl Mailer {
                             content.clone()
                         } else if config.modify_headers {
                             info!("修改邮件头并发送邮件: {}", file_path);
-                            let subject = message.subject().unwrap_or("No Subject").to_string();
-                            let text_content = message.body_text(0).unwrap_or_default().to_string();
-                            let html_content = message.body_html(0).map(|s| s.to_string());
+            let subject = message.subject().unwrap_or("No Subject").to_string();
+            let text_content = message.body_text(0).unwrap_or_default().to_string();
+            let html_content = message.body_html(0).map(|s| s.to_string());
                             let mut builder = MessageBuilder::new()
-                                .from(("", config.from.as_str()))
+                    .from(("", config.from.as_str()))
                                 .to(current_recipients.clone())
-                                .subject(&subject)
-                                .text_body(&text_content);
-                            if let Some(html) = &html_content {
+                    .subject(&subject)
+                    .text_body(&text_content);
+                if let Some(html) = &html_content {
                                 builder = builder.html_body(html);
                             }
                             match builder.write_to_vec() {
@@ -1176,10 +1185,22 @@ impl Mailer {
                                 }
                                 Ok(Err(e)) => {
                                     error!("邮件发送失败 for file {}: {}", file_path, e);
-                                    failures.push((
-                                        format!("邮件发送失败: {}", e),
-                                        file_path.to_string(),
-                                    ));
+                                    let error_msg = format!("邮件发送失败: {}", e);
+                                    failures.push((error_msg.clone(), file_path.to_string()));
+                                    
+                                    // 检测关键SMTP错误
+                                    if error_msg.contains("421") ||
+                                       error_msg.contains("Cannot accept further commands") ||
+                                       error_msg.contains("Broken pipe") ||
+                                       error_msg.contains("Connection reset") ||
+                                       error_msg.contains("Unparseable SMTP reply") {
+                                        warn!(
+                                            "send_batch_emails: 数据发送时检测到连接问题: {}",
+                                            error_msg
+                                        );
+                                        connection_should_reset = true;
+                                        break;
+                                    }
                                 }
                                 Err(_) => {
                                     error!("邮件发送超时 for file: {}", file_path);
@@ -1222,7 +1243,7 @@ impl Mailer {
                 }
             }
         }
-        (successes, failures)
+        (successes, failures, connection_should_reset)
     }
 
     async fn process_batch_with_tls_client<S: AsyncRead + AsyncWrite + Unpin + Send>(
@@ -1316,7 +1337,7 @@ impl Mailer {
                 };
 
                 if !had_error_this_email {
-                    let send_start = Instant::now();
+            let send_start = Instant::now();
                     let empty_params = Parameters::default();
                     let mut email_send_op_failed = false;
 
@@ -1343,13 +1364,16 @@ impl Mailer {
                             group_stats.3.push((error_msg.clone(), file_path.to_string()));
                             email_send_op_failed = true;
                             
-                            // 如果是连接相关的错误（如Broken pipe），提前退出当前批次
-                            if error_msg.contains("Broken pipe") || 
-                               error_msg.contains("连接") ||
+                            // 检测关键SMTP错误，特别是421等要求断开连接的错误
+                            if error_msg.contains("421") ||
+                               error_msg.contains("Cannot accept further commands") ||
+                               error_msg.contains("Broken pipe") ||
+                               error_msg.contains("Connection reset") ||
+                               error_msg.contains("Unparseable SMTP reply") ||
                                error_msg.contains("timeout") ||
                                error_msg.contains("超时") {
                                 warn!(
-                                    "进程组 {}: 设置发件人时检测到连接问题，提前退出当前批次: {}",
+                                    "进程组 {}: 设置发件人时检测到需要断开连接的SMTP错误，提前退出批次: {}",
                                     process_group_id, error_msg
                                 );
                                 break;
@@ -1457,13 +1481,16 @@ impl Mailer {
                                     let error_msg = format!("邮件发送失败: {}", e);
                                     group_stats.3.push((error_msg.clone(), file_path.to_string()));
                                     
-                                    // 如果是连接相关的错误，提前退出当前批次以避免后续邮件也失败
-                                    if error_msg.contains("Broken pipe") || 
-                                       error_msg.contains("连接") ||
+                                    // 检测关键SMTP错误，特别是421等要求断开连接的错误
+                                    if error_msg.contains("421") ||
+                                       error_msg.contains("Cannot accept further commands") ||
+                                       error_msg.contains("Broken pipe") ||
+                                       error_msg.contains("Connection reset") ||
+                                       error_msg.contains("Unparseable SMTP reply") ||
                                        error_msg.contains("timeout") ||
                                        error_msg.contains("超时") {
                                         warn!(
-                                            "进程组 {}: 检测到连接问题，提前退出当前批次: {}",
+                                            "进程组 {}: 检测到需要断开连接的SMTP错误，提前退出批次: {}",
                                             process_group_id, error_msg
                                         );
                                         break;
