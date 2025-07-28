@@ -900,6 +900,15 @@ impl Mailer {
                                         // 立即重置连接，下个批次将重新建立
                                         client_opt = None;
                                     }
+                                    
+                                    // batch-size=1时强制关闭连接，避免连接重用
+                                    if config.batch_size == 1 {
+                                        info!(
+                                            "进程组 {}: batch-size=1，强制关闭连接以确保下一批次建立新连接",
+                                            i + 1
+                                        );
+                                        client_opt = None;
+                                    }
                                 } else {
                                     info!(
                                         "进程组 {} (非认证Plain): SMTP连接不可用，跳过当前批次发送",
@@ -1213,6 +1222,26 @@ impl Mailer {
                 }
             }
 
+            // 添加RSET命令：如果还有更多邮件要发送，重置SMTP状态
+            if email_idx < files.len() - 1 && running.load(Ordering::SeqCst) && !connection_should_reset {
+                info!(
+                    "send_batch_emails: 发送RSET命令重置SMTP状态 (批次邮件 {}/{})",
+                    email_idx + 1,
+                    files.len()
+                );
+                if let Err(e) = client.rset().await {
+                    warn!(
+                        "send_batch_emails: RSET命令发送失败 (批次邮件 {}/{}): {}",
+                        email_idx + 1,
+                        files.len(),
+                        e
+                    );
+                    // RSET失败通常意味着连接有问题，标记需要重置连接
+                    connection_should_reset = true;
+                    break;
+                }
+            }
+
             if config.email_send_interval_ms > 0
                 && email_idx < files.len() - 1
                 && running.load(Ordering::SeqCst)
@@ -1508,6 +1537,27 @@ impl Mailer {
                             }
                         }
                     }
+                }
+            }
+
+            // 添加RSET命令：如果还有更多邮件要发送，重置SMTP状态
+            if email_idx < files.len() - 1 && running.load(Ordering::SeqCst) {
+                info!(
+                    "进程组 {}: 发送RSET命令重置SMTP状态 (批次邮件 {}/{})",
+                    process_group_id,
+                    email_idx + 1,
+                    files.len()
+                );
+                if let Err(e) = client.rset().await {
+                    warn!(
+                        "进程组 {}: RSET命令发送失败 (批次邮件 {}/{}): {}",
+                        process_group_id,
+                        email_idx + 1,
+                        files.len(),
+                        e
+                    );
+                    // RSET失败通常意味着连接有问题，提前退出批次
+                    break;
                 }
             }
 
