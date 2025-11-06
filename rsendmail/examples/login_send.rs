@@ -1,5 +1,5 @@
 use mail_send::mail_builder::MessageBuilder;
-use mail_send::{SmtpClient, SmtpClientBuilder};
+use mail_send::SmtpClientBuilder;
 use std::env;
 use std::error::Error;
 use std::fmt;
@@ -8,19 +8,19 @@ use std::num::ParseIntError;
 // 定义我们自己的错误类型
 #[derive(Debug)]
 enum AppError {
-    ParseError(ParseIntError),
-    IoError(std::io::Error),
-    SmtpError(mail_send::Error),
-    CustomError(String),
+    Parse(ParseIntError),
+    Io(std::io::Error),
+    Smtp(mail_send::Error),
+    Custom(String),
 }
 
 impl fmt::Display for AppError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AppError::ParseError(e) => write!(f, "解析错误: {}", e),
-            AppError::IoError(e) => write!(f, "IO错误: {}", e),
-            AppError::SmtpError(e) => write!(f, "SMTP错误: {}", e),
-            AppError::CustomError(s) => write!(f, "{}", s),
+            AppError::Parse(e) => write!(f, "解析错误: {}", e),
+            AppError::Io(e) => write!(f, "IO错误: {}", e),
+            AppError::Smtp(e) => write!(f, "SMTP错误: {}", e),
+            AppError::Custom(s) => write!(f, "{}", s),
         }
     }
 }
@@ -29,19 +29,19 @@ impl Error for AppError {}
 
 impl From<ParseIntError> for AppError {
     fn from(err: ParseIntError) -> Self {
-        AppError::ParseError(err)
+        AppError::Parse(err)
     }
 }
 
 impl From<std::io::Error> for AppError {
     fn from(err: std::io::Error) -> Self {
-        AppError::IoError(err)
+        AppError::Io(err)
     }
 }
 
 impl From<mail_send::Error> for AppError {
     fn from(err: mail_send::Error) -> Self {
-        AppError::SmtpError(err)
+        AppError::Smtp(err)
     }
 }
 
@@ -59,7 +59,7 @@ async fn main() -> Result<(), AppError> {
             "示例: {} smtp.qq.com 465 your_email@qq.com your_password recipient@example.com",
             args[0]
         );
-        return Err(AppError::CustomError("参数不足".to_string()));
+        return Err(AppError::Custom("参数不足".to_string()));
     }
 
     let smtp_server = &args[1];
@@ -97,7 +97,7 @@ async fn main() -> Result<(), AppError> {
     let mut client = builder
         .connect()
         .await
-        .map_err(|e| AppError::CustomError(format!("连接或认证失败: {}", e)))?;
+        .map_err(|e| AppError::Custom(format!("连接或认证失败: {}", e)))?;
 
     println!("成功连接到SMTP服务器并通过认证");
 
@@ -112,7 +112,7 @@ async fn main() -> Result<(), AppError> {
     client
         .send(message)
         .await
-        .map_err(|e| AppError::CustomError(format!("邮件发送失败: {}", e)))?;
+        .map_err(|e| AppError::Custom(format!("邮件发送失败: {}", e)))?;
 
     println!("邮件发送成功！");
 

@@ -124,6 +124,14 @@ pub struct Config {
     /// 是否接受无效的证书
     #[arg(long, default_value_t = false)]
     pub accept_invalid_certs: bool,
+
+    /// 发送失败的EML文件保存目录
+    #[arg(long)]
+    pub failed_emails_dir: Option<String>,
+
+    /// 日志文件保存路径（如果指定，日志会同时输出到控制台和文件）
+    #[arg(long)]
+    pub log_file: Option<String>,
 }
 
 #[derive(Debug, PartialEq)]

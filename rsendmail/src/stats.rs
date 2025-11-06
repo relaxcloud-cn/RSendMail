@@ -35,7 +35,7 @@ impl Stats {
             .or_insert(0) += 1;
         self.failed_files
             .entry(error_type.to_string())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(file_path.to_string());
         self.send_errors += 1;
     }

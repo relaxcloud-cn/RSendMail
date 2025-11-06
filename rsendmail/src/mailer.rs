@@ -7,7 +7,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::task;
 use tokio::time::timeout;
@@ -17,6 +17,17 @@ use crate::anonymizer::EmailAnonymizer;
 use crate::config::Config;
 use crate::stats::Stats;
 use mail_send::mail_builder::MessageBuilder;
+
+// Type alias for group statistics to reduce complexity
+type GroupStats = (usize, Vec<Duration>, Vec<Duration>, Vec<(String, String)>);
+
+// Structure to hold email content parameters
+struct EmailContent<'a> {
+    filename: &'a str,
+    subject: &'a str,
+    text_content: &'a str,
+    html_content: &'a Option<String>,
+}
 
 pub struct Mailer {
     config: Config,
@@ -38,6 +49,60 @@ impl Mailer {
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| String::from("未知文件"))
+    }
+
+    // 保存发送失败的EML文件到指定目录
+    fn save_failed_email(config: &Config, source_path: &str) {
+        if let Some(ref failed_dir) = config.failed_emails_dir {
+            let failed_dir_path = Path::new(failed_dir);
+
+            // 创建目录（如果不存在）
+            if let Err(e) = fs::create_dir_all(failed_dir_path) {
+                error!("创建失败邮件保存目录失败 {}: {}", failed_dir, e);
+                return;
+            }
+
+            // 获取源文件名
+            let source_file_path = Path::new(source_path);
+            let original_filename = source_file_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown.eml");
+
+            // 生成唯一的目标文件名（添加时间戳避免覆盖）
+            let timestamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or(Duration::from_secs(0))
+                .as_millis();
+
+            let dest_filename = if original_filename.contains('.') {
+                let parts: Vec<&str> = original_filename.rsplitn(2, '.').collect();
+                if parts.len() == 2 {
+                    format!("{}_{}.{}", parts[1], timestamp, parts[0])
+                } else {
+                    format!("{}_{}", original_filename, timestamp)
+                }
+            } else {
+                format!("{}_{}", original_filename, timestamp)
+            };
+
+            let dest_path = failed_dir_path.join(&dest_filename);
+
+            // 复制文件
+            match fs::copy(source_path, &dest_path) {
+                Ok(_) => {
+                    info!("已保存失败邮件: {} -> {}", source_path, dest_path.display());
+                }
+                Err(e) => {
+                    error!(
+                        "保存失败邮件时出错 {} -> {}: {}",
+                        source_path,
+                        dest_path.display(),
+                        e
+                    );
+                }
+            }
+        }
     }
 
     pub async fn send_all_with_cancel(&self, running: Arc<AtomicBool>) -> Result<Stats> {
@@ -315,13 +380,10 @@ impl Mailer {
     async fn execute_send_logic<T: AsyncRead + AsyncWrite + Unpin + Send>(
         &self,
         client: &mut SmtpClient<T>,
-        attachment_path: &str,         // For logging and stats
-        filename: &str,                // For email construction
-        subject: &str,                 // For email construction
-        text_content: &str,            // For email construction
-        html_content: &Option<String>, // For email construction
-        stats: &mut Stats,             // To update stats
-        running: Arc<AtomicBool>,      // To check for cancellation
+        attachment_path: &str,            // For logging and stats
+        email_content: &EmailContent<'_>, // Email construction parameters
+        stats: &mut Stats,                // To update stats
+        running: Arc<AtomicBool>,         // To check for cancellation
     ) -> Result<()> {
         // Returns Result to indicate if overall send logic had issues, not individual email error
         if !running.load(Ordering::SeqCst) {
@@ -393,10 +455,10 @@ impl Mailer {
         let mut builder = MessageBuilder::new()
             .from(("", self.config.from.as_str()))
             .to(recipients) // Pass Vec<&str>
-            .subject(subject)
-            .text_body(text_content);
+            .subject(email_content.subject)
+            .text_body(email_content.text_content);
 
-        if let Some(html) = html_content {
+        if let Some(html) = email_content.html_content {
             builder = builder.html_body(html);
         }
 
@@ -404,7 +466,7 @@ impl Mailer {
             .ok()
             .flatten()
             .map_or("application/octet-stream", |k| k.mime_type());
-        builder = builder.attachment(mime_type, filename, &attachment_content[..]);
+        builder = builder.attachment(mime_type, email_content.filename, &attachment_content[..]);
 
         let mail_content = match builder.write_to_vec() {
             Ok(content) => content,
@@ -503,14 +565,17 @@ impl Mailer {
                     {
                         Ok(Ok(mut client)) => {
                             // client is SmtpClient<TlsStream<TcpStream>>
+                            let email_content = EmailContent {
+                                filename: &filename,
+                                subject: &subject,
+                                text_content: &text_content,
+                                html_content: &html_content,
+                            };
                             let _ = self
                                 .execute_send_logic(
                                     &mut client,
                                     attachment_path,
-                                    &filename,
-                                    &subject,
-                                    &text_content,
-                                    &html_content,
+                                    &email_content,
                                     &mut stats,
                                     running.clone(),
                                 )
@@ -559,14 +624,17 @@ impl Mailer {
                 {
                     Ok(Ok(mut client)) => {
                         // client is SmtpClient<TlsStream<TcpStream>>
+                        let email_content = EmailContent {
+                            filename: &filename,
+                            subject: &subject,
+                            text_content: &text_content,
+                            html_content: &html_content,
+                        };
                         let _ = self
                             .execute_send_logic(
                                 &mut client,
                                 attachment_path,
-                                &filename,
-                                &subject,
-                                &text_content,
-                                &html_content,
+                                &email_content,
                                 &mut stats,
                                 running.clone(),
                             )
@@ -596,14 +664,17 @@ impl Mailer {
                 {
                     Ok(Ok(mut client)) => {
                         // client is SmtpClient<TcpStream>
+                        let email_content = EmailContent {
+                            filename: &filename,
+                            subject: &subject,
+                            text_content: &text_content,
+                            html_content: &html_content,
+                        };
                         let _ = self
                             .execute_send_logic(
                                 &mut client,
                                 attachment_path,
-                                &filename,
-                                &subject,
-                                &text_content,
-                                &html_content,
+                                &email_content,
                                 &mut stats,
                                 running.clone(),
                             )
@@ -637,16 +708,16 @@ impl Mailer {
         running: Arc<AtomicBool>,
     ) -> Result<()> {
         let start = Instant::now();
-        let chunk_size = (files.len() + num_processes - 1) / num_processes;
-        
+        let chunk_size = files.len().div_ceil(num_processes);
+
         let mut handles = vec![];
         for (i, chunk) in files.chunks(chunk_size).enumerate() {
             let chunk = chunk.to_vec();
             let config = self.config.clone();
             let running = running.clone();
-            
+
             let handle = task::spawn(async move {
-                let mut group_stats = (0, Vec::new(), Vec::new(), Vec::new());
+                let mut group_stats: GroupStats = (0, Vec::new(), Vec::new(), Vec::new());
                 let mut current_batch = Vec::new(); // Correctly declared here
 
                 // For non-auth mode with connection reuse (client_opt)
@@ -663,13 +734,13 @@ impl Mailer {
                     }
 
                     current_batch.push(file.clone());
-                    
+
                     if current_batch.len() >= config.batch_size || j == chunk.len() - 1 {
                         info!(
                             "进程组 {} 开始发送第 {}/{} 批，包含 {} 封邮件",
                             i + 1,
                             j / config.batch_size + 1,
-                            (chunk.len() + config.batch_size - 1) / config.batch_size,
+                            chunk.len().div_ceil(config.batch_size),
                             current_batch.len()
                         );
 
@@ -730,7 +801,7 @@ impl Mailer {
                                                 ));
                                             }
                                         }
-                                Err(_) => {
+                                        Err(_) => {
                                             error!("进程组 {}: SMTP认证连接超时", i + 1);
                                             for file_path_in_batch in &current_batch {
                                                 group_stats.3.push((
@@ -876,21 +947,22 @@ impl Mailer {
 
                                 if let Some(ref mut client) = client_opt {
                                     // client is SmtpClient<TcpStream>
-                                    let (successes, failures, should_reset_connection) = Self::send_batch_emails(
-                                        &config,
-                                        &current_batch,
-                                        client,
-                                        running.clone(),
-                                    )
-                                    .await;
-                                    
+                                    let (successes, failures, should_reset_connection) =
+                                        Self::send_batch_emails(
+                                            &config,
+                                            &current_batch,
+                                            client,
+                                            running.clone(),
+                                        )
+                                        .await;
+
                                     group_stats.0 += successes.len();
                                     group_stats.1.extend(successes.iter().map(|(pd, _)| *pd));
                                     group_stats.2.extend(successes.iter().map(|(_, sd)| *sd));
                                     for (error_message, file_path_string) in failures {
                                         group_stats.3.push((error_message, file_path_string));
                                     }
-                                    
+
                                     // 使用函数返回的连接状态标志，立即响应SMTP协议要求
                                     if should_reset_connection {
                                         warn!(
@@ -900,7 +972,7 @@ impl Mailer {
                                         // 立即重置连接，下个批次将重新建立
                                         client_opt = None;
                                     }
-                                    
+
                                     // batch-size=1时强制关闭连接，避免连接重用
                                     if config.batch_size == 1 {
                                         info!(
@@ -1004,7 +1076,7 @@ impl Mailer {
     ) -> (Vec<(Duration, Duration)>, Vec<(String, String)>, bool) {
         let mut successes = Vec::new();
         let mut failures = Vec::new();
-        let mut connection_should_reset = false;  // 跟踪连接是否需要重置
+        let mut connection_should_reset = false; // 跟踪连接是否需要重置
         let mut anonymizer = if config.anonymize_emails {
             Some(EmailAnonymizer::new(&config.anonymize_domain))
         } else {
@@ -1055,6 +1127,7 @@ impl Mailer {
                 Err(e) => {
                     error!("读取文件 {} 失败: {}", file_path, e);
                     failures.push((format!("读取文件失败: {}", e), file_path.to_string()));
+                    Self::save_failed_email(config, file_path);
                     had_error_this_email = true;
                     Vec::new() // dummy content
                 }
@@ -1063,11 +1136,12 @@ impl Mailer {
             if !had_error_this_email {
                 let parse_duration_final =
                     current_file_parse_duration.unwrap_or_else(|| parse_start.elapsed());
-            let message = match MessageParser::default().parse(&content) {
-                Some(msg) => msg,
-                None => {
-                    error!("无法解析邮件文件: {}", file_path);
+                let message = match MessageParser::default().parse(&content) {
+                    Some(msg) => msg,
+                    None => {
+                        error!("无法解析邮件文件: {}", file_path);
                         failures.push(("无法解析邮件文件".to_string(), file_path.to_string()));
+                        Self::save_failed_email(config, file_path);
                         had_error_this_email = true;
                         MessageParser::default().parse(b"Subject: error").unwrap()
                         // dummy message
@@ -1089,6 +1163,7 @@ impl Mailer {
                             format!("没有有效的收件人地址: {}", config.to),
                             file_path.to_string(),
                         ));
+                        Self::save_failed_email(config, file_path);
                         email_send_op_failed = true;
                     }
 
@@ -1098,14 +1173,17 @@ impl Mailer {
                             error!("send_batch_emails: 设置发件人失败 for {}: {}", file_path, e);
                             let error_msg = format!("设置发件人失败: {}", e);
                             failures.push((error_msg.clone(), file_path.to_string()));
+                            Self::save_failed_email(config, file_path);
                             email_send_op_failed = true;
-                            
+
                             // 检测关键SMTP错误，这些错误表示服务器要求断开连接
                             if error_msg.contains("421") ||  // Service not available, closing transmission channel
                                error_msg.contains("Cannot accept further commands") ||
                                error_msg.contains("Broken pipe") ||
                                error_msg.contains("Connection reset") ||
-                               error_msg.contains("Unparseable SMTP reply") { // 连接已损坏的信号
+                               error_msg.contains("Unparseable SMTP reply")
+                            {
+                                // 连接已损坏的信号
                                 warn!(
                                     "send_batch_emails: 检测到需要重置连接的SMTP错误: {}",
                                     error_msg
@@ -1142,6 +1220,7 @@ impl Mailer {
                                 "send_batch_emails: 所有收件人均设置失败，跳过邮件发送 for {}",
                                 file_path
                             );
+                            Self::save_failed_email(config, file_path);
                             email_send_op_failed = true;
                         }
                     }
@@ -1152,15 +1231,15 @@ impl Mailer {
                             content.clone()
                         } else if config.modify_headers {
                             info!("修改邮件头并发送邮件: {}", file_path);
-            let subject = message.subject().unwrap_or("No Subject").to_string();
-            let text_content = message.body_text(0).unwrap_or_default().to_string();
-            let html_content = message.body_html(0).map(|s| s.to_string());
+                            let subject = message.subject().unwrap_or("No Subject").to_string();
+                            let text_content = message.body_text(0).unwrap_or_default().to_string();
+                            let html_content = message.body_html(0).map(|s| s.to_string());
                             let mut builder = MessageBuilder::new()
-                    .from(("", config.from.as_str()))
+                                .from(("", config.from.as_str()))
                                 .to(current_recipients.clone())
-                    .subject(&subject)
-                    .text_body(&text_content);
-                if let Some(html) = &html_content {
+                                .subject(&subject)
+                                .text_body(&text_content);
+                            if let Some(html) = &html_content {
                                 builder = builder.html_body(html);
                             }
                             match builder.write_to_vec() {
@@ -1171,6 +1250,7 @@ impl Mailer {
                                         format!("构建邮件内容失败: {}", e),
                                         file_path.to_string(),
                                     ));
+                                    Self::save_failed_email(config, file_path);
                                     email_send_op_failed = true;
                                     Vec::new()
                                 }
@@ -1196,13 +1276,15 @@ impl Mailer {
                                     error!("邮件发送失败 for file {}: {}", file_path, e);
                                     let error_msg = format!("邮件发送失败: {}", e);
                                     failures.push((error_msg.clone(), file_path.to_string()));
-                                    
+                                    Self::save_failed_email(config, file_path);
+
                                     // 检测关键SMTP错误
-                                    if error_msg.contains("421") ||
-                                       error_msg.contains("Cannot accept further commands") ||
-                                       error_msg.contains("Broken pipe") ||
-                                       error_msg.contains("Connection reset") ||
-                                       error_msg.contains("Unparseable SMTP reply") {
+                                    if error_msg.contains("421")
+                                        || error_msg.contains("Cannot accept further commands")
+                                        || error_msg.contains("Broken pipe")
+                                        || error_msg.contains("Connection reset")
+                                        || error_msg.contains("Unparseable SMTP reply")
+                                    {
                                         warn!(
                                             "send_batch_emails: 数据发送时检测到连接问题: {}",
                                             error_msg
@@ -1215,6 +1297,7 @@ impl Mailer {
                                     error!("邮件发送超时 for file: {}", file_path);
                                     failures
                                         .push(("邮件发送超时".to_string(), file_path.to_string()));
+                                    Self::save_failed_email(config, file_path);
                                 }
                             }
                         }
@@ -1223,7 +1306,10 @@ impl Mailer {
             }
 
             // 添加RSET命令：如果还有更多邮件要发送，重置SMTP状态
-            if email_idx < files.len() - 1 && running.load(Ordering::SeqCst) && !connection_should_reset {
+            if email_idx < files.len() - 1
+                && running.load(Ordering::SeqCst)
+                && !connection_should_reset
+            {
                 info!(
                     "send_batch_emails: 发送RSET命令重置SMTP状态 (批次邮件 {}/{})",
                     email_idx + 1,
@@ -1279,7 +1365,7 @@ impl Mailer {
         config: &Config,
         files: &[String],
         client: &mut SmtpClient<S>,
-        group_stats: &mut (usize, Vec<Duration>, Vec<Duration>, Vec<(String, String)>),
+        group_stats: &mut GroupStats,
         process_group_id: usize,
         running: Arc<AtomicBool>,
     ) -> Result<()> {
@@ -1342,6 +1428,7 @@ impl Mailer {
                     group_stats
                         .3
                         .push((format!("读取文件失败: {}", e), file_path.to_string()));
+                    Self::save_failed_email(config, file_path);
                     had_error_this_email = true;
                     Vec::new()
                 }
@@ -1360,13 +1447,14 @@ impl Mailer {
                         group_stats
                             .3
                             .push(("无法解析邮件文件".to_string(), file_path.to_string()));
+                        Self::save_failed_email(config, file_path);
                         had_error_this_email = true;
                         MessageParser::default().parse(b"Subject: error").unwrap()
                     }
                 };
 
                 if !had_error_this_email {
-            let send_start = Instant::now();
+                    let send_start = Instant::now();
                     let empty_params = Parameters::default();
                     let mut email_send_op_failed = false;
 
@@ -1379,6 +1467,7 @@ impl Mailer {
                             format!("没有有效的收件人地址: {}", config.to),
                             file_path.to_string(),
                         ));
+                        Self::save_failed_email(config, file_path);
                         email_send_op_failed = true;
                     }
 
@@ -1390,17 +1479,21 @@ impl Mailer {
                                 process_group_id, file_path, e
                             );
                             let error_msg = format!("设置发件人失败: {}", e);
-                            group_stats.3.push((error_msg.clone(), file_path.to_string()));
+                            group_stats
+                                .3
+                                .push((error_msg.clone(), file_path.to_string()));
+                            Self::save_failed_email(config, file_path);
                             email_send_op_failed = true;
-                            
+
                             // 检测关键SMTP错误，特别是421等要求断开连接的错误
-                            if error_msg.contains("421") ||
-                               error_msg.contains("Cannot accept further commands") ||
-                               error_msg.contains("Broken pipe") ||
-                               error_msg.contains("Connection reset") ||
-                               error_msg.contains("Unparseable SMTP reply") ||
-                               error_msg.contains("timeout") ||
-                               error_msg.contains("超时") {
+                            if error_msg.contains("421")
+                                || error_msg.contains("Cannot accept further commands")
+                                || error_msg.contains("Broken pipe")
+                                || error_msg.contains("Connection reset")
+                                || error_msg.contains("Unparseable SMTP reply")
+                                || error_msg.contains("timeout")
+                                || error_msg.contains("超时")
+                            {
                                 warn!(
                                     "进程组 {}: 设置发件人时检测到需要断开连接的SMTP错误，提前退出批次: {}",
                                     process_group_id, error_msg
@@ -1435,6 +1528,7 @@ impl Mailer {
                                 "进程组 {}: 所有收件人均设置失败，跳过邮件发送 for {}",
                                 process_group_id, file_path
                             );
+                            Self::save_failed_email(config, file_path);
                             email_send_op_failed = true;
                         }
                     }
@@ -1473,6 +1567,7 @@ impl Mailer {
                                         format!("构建邮件内容失败: {}", e),
                                         file_path.to_string(),
                                     ));
+                                    Self::save_failed_email(config, file_path);
                                     email_send_op_failed = true;
                                     Vec::new()
                                 }
@@ -1508,16 +1603,20 @@ impl Mailer {
                                         process_group_id, file_path, e
                                     );
                                     let error_msg = format!("邮件发送失败: {}", e);
-                                    group_stats.3.push((error_msg.clone(), file_path.to_string()));
-                                    
+                                    group_stats
+                                        .3
+                                        .push((error_msg.clone(), file_path.to_string()));
+                                    Self::save_failed_email(config, file_path);
+
                                     // 检测关键SMTP错误，特别是421等要求断开连接的错误
-                                    if error_msg.contains("421") ||
-                                       error_msg.contains("Cannot accept further commands") ||
-                                       error_msg.contains("Broken pipe") ||
-                                       error_msg.contains("Connection reset") ||
-                                       error_msg.contains("Unparseable SMTP reply") ||
-                                       error_msg.contains("timeout") ||
-                                       error_msg.contains("超时") {
+                                    if error_msg.contains("421")
+                                        || error_msg.contains("Cannot accept further commands")
+                                        || error_msg.contains("Broken pipe")
+                                        || error_msg.contains("Connection reset")
+                                        || error_msg.contains("Unparseable SMTP reply")
+                                        || error_msg.contains("timeout")
+                                        || error_msg.contains("超时")
+                                    {
                                         warn!(
                                             "进程组 {}: 检测到需要断开连接的SMTP错误，提前退出批次: {}",
                                             process_group_id, error_msg
@@ -1533,6 +1632,7 @@ impl Mailer {
                                     group_stats
                                         .3
                                         .push(("邮件发送超时".to_string(), file_path.to_string()));
+                                    Self::save_failed_email(config, file_path);
                                 }
                             }
                         }

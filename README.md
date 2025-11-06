@@ -86,6 +86,8 @@ docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp_server> -
 - `--smtp-timeout`: Timeout in seconds for SMTP operations. Default is 60.
 - `--use-tls`: If set, try to use TLS (STARTTLS) for SMTP connection (port 25 or 587). Implicit TLS is always used for port 465.
 - `--accept-invalid-certs`: (TLS only) Accept invalid TLS certificates (e.g., self-signed). WARNING: This reduces security; use only if you trust the target server.
+- `--failed-emails-dir`: Directory to save failed EML files (when specified, failed emails will be automatically copied to this directory with a timestamp added to the filename to avoid overwrites)
+- `--log-file`: Path to save log file (if specified, logs will be output to both console and file for easy record keeping)
 
 ## Logging Levels
 

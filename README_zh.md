@@ -102,6 +102,8 @@ docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp服务器>
 - `--smtp-timeout`: SMTP操作的超时时间（秒）。默认值为60。
 - `--use-tls`: 如果设置，将尝试使用TLS (STARTTLS) 连接SMTP服务器（25或587端口）。如果端口是465，则总是使用隐式TLS。
 - `--accept-invalid-certs`: 接受无效的TLS证书（仅当使用TLS时）。警告：这会降低安全性，请仅在信任目标服务器时使用。
+- `--failed-emails-dir`: 发送失败的EML文件保存目录（指定后会自动将失败的邮件复制到该目录，文件名会添加时间戳避免覆盖）
+- `--log-file`: 日志文件保存路径（如果指定，日志会同时输出到控制台和文件，方便保存运行记录）
 
 ## 日志级别
 
