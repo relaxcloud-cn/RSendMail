@@ -79,7 +79,7 @@ jobs:
 
   # macOS 构建 (CLI + GUI) - Intel
   build-macos-intel:
-    runs-on: macos-13
+    runs-on: macos-15-intel
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -141,13 +141,16 @@ jobs:
           name: macos-arm-binaries
           path: dist/
 
-  # 创建 Release
+  # 创建 Release 并构建 Docker 镜像
   release:
     needs: [build-linux, build-windows, build-macos-intel, build-macos-arm]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Download Linux artifacts
         uses: actions/download-artifact@v4
         with:
@@ -190,3 +193,32 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Docker 构建和推送
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            relaxcloud/rsendmail:${{ steps.version.outputs.VERSION }}
+            relaxcloud/rsendmail:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
