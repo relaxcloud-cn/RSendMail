@@ -1,0 +1,1215 @@
+import { Button, LineEdit, CheckBox, ComboBox, ProgressIndicator, VerticalBox, HorizontalBox, GroupBox, ScrollView, Palette, StyleMetrics } from "std-widgets.slint";
+
+// 嵌入 CJK 字体子集 (只包含 UI 所需的 ~330 个字符，约 160KB)
+import "../fonts/NotoSansSC-Subset.otf";
+
+// ===== 主题系统 =====
+global Theme {
+    // 主色调
+    out property <color> primary: #2563eb;
+    out property <color> primary-light: #3b82f6;
+    out property <color> primary-dark: #1d4ed8;
+
+    // 状态色
+    out property <color> success: #16a34a;
+    out property <color> success-light: #22c55e;
+    out property <color> warning: #d97706;
+    out property <color> warning-light: #f59e0b;
+    out property <color> error: #dc2626;
+    out property <color> error-light: #ef4444;
+
+    // 背景色 - 使用浅蓝灰色系
+    out property <color> bg-primary: #e8eef5;        // 主背景：浅蓝灰
+    out property <color> bg-card: #f8fafc;           // 卡片背景：近白色
+    out property <color> bg-input: #ffffff;          // 输入框：纯白
+
+    // 文字色 - 高对比度
+    out property <color> text-primary: #1a1a2e;      // 主文字：深蓝黑
+    out property <color> text-secondary: #374151;    // 标签：深灰
+    out property <color> text-muted: #6b7280;        // 提示：中灰
+
+    // 边框
+    out property <color> border: #d1d5db;
+    out property <color> border-light: #e5e7eb;
+
+    // 阴影
+    out property <color> shadow: #0000001a;
+    out property <color> shadow-dark: #00000033;
+
+    // 间距
+    out property <length> spacing-xs: 4px;
+    out property <length> spacing-sm: 8px;
+    out property <length> spacing-md: 12px;
+    out property <length> spacing-lg: 16px;
+    out property <length> spacing-xl: 24px;
+
+    // 圆角
+    out property <length> radius-sm: 6px;
+    out property <length> radius-md: 8px;
+    out property <length> radius-lg: 12px;
+    out property <length> radius-xl: 16px;
+}
+
+// ===== 美化卡片组件 =====
+component Card inherits Rectangle {
+    in property <string> title: "";
+
+    background: Theme.bg-card;
+    border-radius: Theme.radius-lg;
+    drop-shadow-blur: 12px;
+    drop-shadow-color: Theme.shadow;
+    drop-shadow-offset-y: 4px;
+
+    VerticalLayout {
+        padding: Theme.spacing-lg;
+        spacing: Theme.spacing-md;
+
+        if title != "": HorizontalLayout {
+            Text {
+                text: title;
+                font-size: 14px;
+                font-weight: 600;
+                color: Theme.text-primary;
+            }
+        }
+
+        @children
+    }
+}
+
+// ===== 美化按钮组件 =====
+component PrimaryButton inherits Rectangle {
+    in property <string> text: "";
+    in property <bool> enabled: true;
+    in property <bool> active: false;
+    callback clicked();
+
+    property <bool> hovered: touch.has-hover;
+    property <bool> pressed: touch.pressed;
+
+    height: 36px;
+    min-width: 80px;
+    border-radius: Theme.radius-md;
+    background: !enabled ? Theme.text-muted :
+                active ? @linear-gradient(180deg, Theme.primary 0%, Theme.primary-dark 100%) :
+                pressed ? Theme.primary-dark :
+                hovered ? Theme.primary-light : Theme.primary;
+
+    animate background { duration: 150ms; easing: ease-out; }
+
+    HorizontalLayout {
+        padding-left: Theme.spacing-lg;
+        padding-right: Theme.spacing-lg;
+
+        Text {
+            text: root.text;
+            font-size: 13px;
+            font-weight: 600;
+            color: white;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? pointer : default;
+        clicked => { root.clicked(); }
+    }
+}
+
+// ===== 次要按钮 =====
+component SecondaryButton inherits Rectangle {
+    in property <string> text: "";
+    in property <bool> enabled: true;
+    in property <bool> active: false;
+    callback clicked();
+
+    property <bool> hovered: touch.has-hover;
+    property <bool> pressed: touch.pressed;
+
+    height: 36px;
+    min-width: 70px;
+    border-radius: Theme.radius-md;
+    border-width: 1px;
+    border-color: active ? Theme.primary : Theme.border;
+    background: !enabled ? Theme.bg-input :
+                active ? @linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%) :
+                pressed ? Theme.bg-input :
+                hovered ? Theme.border-light : Theme.bg-card;
+
+    animate background, border-color { duration: 150ms; easing: ease-out; }
+
+    HorizontalLayout {
+        padding-left: Theme.spacing-md;
+        padding-right: Theme.spacing-md;
+
+        Text {
+            text: root.text;
+            font-size: 13px;
+            font-weight: 500;
+            color: active ? Theme.primary : (root.enabled ? Theme.text-primary : Theme.text-muted);
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? pointer : default;
+        clicked => { root.clicked(); }
+    }
+}
+
+// ===== 统计卡片 =====
+component StatCard inherits Rectangle {
+    in property <string> label: "";
+    in property <string> value: "0";
+    in property <color> accent-color: Theme.primary;
+
+    background: Theme.bg-card;
+    border-radius: Theme.radius-lg;
+    border-width: 1px;
+    border-color: Theme.border-light;
+
+    VerticalLayout {
+        padding: Theme.spacing-md;
+        spacing: Theme.spacing-xs;
+
+        Text {
+            text: label;
+            font-size: 12px;
+            color: Theme.text-secondary;
+            horizontal-alignment: center;
+        }
+
+        Text {
+            text: value;
+            font-size: 28px;
+            font-weight: 700;
+            color: accent-color;
+            horizontal-alignment: center;
+        }
+    }
+}
+
+// ===== 日志条目组件 =====
+component LogItem inherits Rectangle {
+    in property <string> timestamp: "";
+    in property <string> level: "INFO";
+    in property <string> message: "";
+
+    property <color> level-color: level == "ERROR" ? Theme.error :
+                                   (level == "WARN" ? Theme.warning : Theme.primary);
+    property <color> bg-color: level == "ERROR" ? #fef2f2 :
+                                (level == "WARN" ? #fffbeb : #eff6ff);
+
+    background: bg-color;
+    border-radius: Theme.radius-sm;
+    min-height: 32px;
+
+    HorizontalLayout {
+        padding: Theme.spacing-sm;
+        spacing: Theme.spacing-sm;
+
+        // 时间戳
+        Text {
+            text: timestamp;
+            font-size: 11px;
+            color: Theme.text-secondary;
+            vertical-alignment: center;
+            min-width: 60px;
+        }
+
+        // 级别标签
+        Rectangle {
+            width: 48px;
+            height: 20px;
+            border-radius: 4px;
+            background: level-color;
+
+            Text {
+                text: level;
+                font-size: 10px;
+                font-weight: 600;
+                color: white;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
+        // 消息内容
+        Text {
+            text: message;
+            font-size: 12px;
+            color: Theme.text-primary;
+            overflow: elide;
+            horizontal-stretch: 1;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// 发送状态枚举
+export enum SendStatus {
+    Idle,
+    Preparing,
+    Sending,
+    Stopped,
+    Completed
+}
+
+// 发送模式枚举
+export enum SendMode {
+    EmlBatch,
+    SingleAttachment,
+    DirAttachment
+}
+
+// 日志条目
+export struct LogEntry {
+    timestamp: string,
+    level: string,
+    message: string,
+}
+
+// 主应用窗口
+export component AppWindow inherits Window {
+    // 强制使用浅色主题，确保标准组件颜色正确
+    init => {
+        Palette.color-scheme = ColorScheme.light;
+    }
+
+    title: "RSendMail";
+    min-width: 900px;
+    min-height: 600px;
+    preferred-width: 1200px;
+    preferred-height: 800px;
+    background: Theme.bg-primary;
+    default-font-family: "Noto Sans CJK SC";
+
+    // ===== i18n 翻译属性 =====
+    in-out property <string> tr-smtp-server: "SMTP Server";
+    in-out property <string> tr-server-address: "Server Address";
+    in-out property <string> tr-port: "Port";
+    in-out property <string> tr-use-tls: "Use TLS";
+    in-out property <string> tr-accept-invalid-certs: "Accept Invalid Certs";
+    in-out property <string> tr-auth-required: "Authentication Required";
+    in-out property <string> tr-username: "Username";
+    in-out property <string> tr-password: "Password";
+    in-out property <string> tr-sender: "Sender";
+    in-out property <string> tr-recipient: "Recipient";
+    in-out property <string> tr-recipient-hint: "(comma separated)";
+
+    in-out property <string> tr-send-mode: "Send Mode";
+    in-out property <string> tr-eml-batch: "EML Batch";
+    in-out property <string> tr-single-attachment: "Single Attachment";
+    in-out property <string> tr-dir-attachment: "Dir Attachment";
+    in-out property <string> tr-eml-directory: "EML Directory";
+    in-out property <string> tr-attachment-file: "Attachment";
+    in-out property <string> tr-attachment-directory: "Attachment Dir";
+    in-out property <string> tr-extension: "Extension";
+    in-out property <string> tr-browse: "Browse";
+    in-out property <string> tr-email-subject: "Subject";
+    in-out property <string> tr-email-body: "Body";
+    in-out property <string> tr-filename-hint: "Use {filename} for filename";
+
+    in-out property <string> tr-advanced-options: "Advanced Options";
+    in-out property <string> tr-performance: "Performance";
+    in-out property <string> tr-processes: "Processes";
+    in-out property <string> tr-batch-size: "Batch Size";
+    in-out property <string> tr-send-interval: "Interval(ms)";
+    in-out property <string> tr-timeout: "Timeout(s)";
+    in-out property <string> tr-loop-settings: "Loop Settings";
+    in-out property <string> tr-infinite-loop: "Infinite Loop";
+    in-out property <string> tr-repeat-count: "Repeat";
+    in-out property <string> tr-loop-interval: "Loop Interval(s)";
+    in-out property <string> tr-retry-interval: "Retry Interval(s)";
+    in-out property <string> tr-email-processing: "Email Processing";
+    in-out property <string> tr-keep-headers: "Keep Headers";
+    in-out property <string> tr-modify-headers: "Modify Headers";
+    in-out property <string> tr-anonymize-emails: "Anonymize";
+    in-out property <string> tr-domain: "Domain";
+    in-out property <string> tr-logging: "Logging";
+    in-out property <string> tr-log-level: "Log Level";
+    in-out property <string> tr-log-file: "Log File";
+    in-out property <string> tr-failed-emails-dir: "Failed Dir";
+    in-out property <string> tr-optional: "(optional)";
+
+    in-out property <string> tr-statistics: "Statistics";
+    in-out property <string> tr-total: "Total";
+    in-out property <string> tr-success: "Success";
+    in-out property <string> tr-failed: "Failed";
+    in-out property <string> tr-current-round: "Round";
+    in-out property <string> tr-elapsed-time: "Elapsed";
+
+    in-out property <string> tr-send-log: "Send Log";
+    in-out property <string> tr-clear: "Clear";
+    in-out property <string> tr-export-log: "Export";
+
+    in-out property <string> tr-save-config: "Save";
+    in-out property <string> tr-load-config: "Load";
+    in-out property <string> tr-test-connection: "Test";
+    in-out property <string> tr-start-send: "Start";
+    in-out property <string> tr-stop-send: "Stop";
+
+    in-out property <string> tr-language: "Language";
+
+    // ===== 语言设置 =====
+    in-out property <[string]> available-languages: [];
+    in-out property <int> current-language-index: 0;
+    callback language-changed(int);
+
+    // ===== SMTP 配置 =====
+    in-out property <string> smtp-server: "";
+    in-out property <string> smtp-port-str: "25";
+    in-out property <bool> use-tls: false;
+    in-out property <bool> accept-invalid-certs: false;
+    in-out property <bool> auth-mode: false;
+    in-out property <string> username: "";
+    in-out property <string> password: "";
+    in-out property <string> from-address: "";
+    in-out property <string> to-address: "";
+
+    // ===== 发送模式 =====
+    in-out property <SendMode> send-mode: SendMode.EmlBatch;
+
+    // ===== EML 模式配置 =====
+    in-out property <string> eml-dir: "";
+    in-out property <string> eml-extension: "eml";
+    in-out property <int> eml-file-count: 0;
+
+    // ===== 附件模式配置 =====
+    in-out property <string> attachment-path: "";
+    in-out property <string> attachment-dir: "";
+    in-out property <int> attachment-file-count: 0;
+
+    // ===== 邮件模板 =====
+    in-out property <string> subject-template: "Attachment: {filename}";
+    in-out property <string> text-template: "Please check: {filename}";
+
+    // ===== 高级选项 =====
+    in-out property <string> processes: "auto";
+    in-out property <string> batch-size-str: "1";
+    in-out property <string> smtp-timeout-str: "30";
+    in-out property <string> email-interval-str: "0";
+    in-out property <bool> loop-mode: false;
+    in-out property <string> repeat-count-str: "1";
+    in-out property <string> loop-interval-str: "1";
+    in-out property <string> retry-interval-str: "5";
+    in-out property <bool> keep-headers: false;
+    in-out property <bool> modify-headers: false;
+    in-out property <bool> anonymize-emails: false;
+    in-out property <string> anonymize-domain: "example.com";
+    in-out property <string> log-level: "info";
+    in-out property <string> log-file: "";
+    in-out property <string> failed-emails-dir: "";
+
+    // ===== 发送状态 =====
+    in-out property <SendStatus> status: SendStatus.Idle;
+    in-out property <int> total-count: 0;
+    in-out property <int> sent-count: 0;
+    in-out property <int> success-count: 0;
+    in-out property <int> fail-count: 0;
+    in-out property <float> qps: 0;
+    in-out property <string> elapsed-time: "00:00:00";
+    in-out property <int> current-round: 1;
+    in-out property <int> total-rounds: 1;
+    in-out property <string> status-text: "Ready";
+
+    // ===== 日志 =====
+    in-out property <[LogEntry]> logs: [];
+
+    // ===== 错误/消息对话框 =====
+    in-out property <bool> show-message-dialog: false;
+    in-out property <string> message-dialog-title: "Message";
+    in-out property <string> message-dialog-content: "";
+    in-out property <bool> message-dialog-is-error: false;
+    callback close-message-dialog();
+
+    // ===== 回调 =====
+    callback test-connection();
+    callback start-send();
+    callback stop-send();
+    callback browse-eml-dir();
+    callback browse-attachment();
+    callback browse-attachment-dir();
+    callback browse-log-file();
+    callback browse-failed-dir();
+    callback clear-logs();
+    callback export-logs();
+    callback save-config();
+    callback load-config();
+
+    // ===== 主布局 =====
+    VerticalLayout {
+        padding: Theme.spacing-lg;
+        spacing: Theme.spacing-md;
+
+        // ===== 顶部栏 =====
+        Rectangle {
+            height: 48px;
+            background: Theme.bg-card;
+            border-radius: Theme.radius-lg;
+            drop-shadow-blur: 8px;
+            drop-shadow-color: Theme.shadow;
+            drop-shadow-offset-y: 2px;
+
+            HorizontalLayout {
+                padding-left: Theme.spacing-lg;
+                padding-right: Theme.spacing-lg;
+                spacing: Theme.spacing-md;
+
+                // Logo 和标题
+                HorizontalLayout {
+                    spacing: Theme.spacing-sm;
+
+                    Rectangle {
+                        width: 32px;
+                        height: 32px;
+                        border-radius: 8px;
+                        background: @linear-gradient(135deg, Theme.primary 0%, Theme.primary-dark 100%);
+
+                        Text {
+                            text: "📧";
+                            font-size: 16px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    Text {
+                        text: "RSendMail";
+                        font-size: 18px;
+                        font-weight: 700;
+                        color: Theme.text-primary;
+                        vertical-alignment: center;
+                    }
+
+                    Text {
+                        text: "v0.2.0";
+                        font-size: 12px;
+                        color: Theme.text-muted;
+                        vertical-alignment: center;
+                    }
+                }
+
+                Rectangle { horizontal-stretch: 1; }
+
+                // 语言选择
+                HorizontalLayout {
+                    spacing: Theme.spacing-sm;
+
+                    Text {
+                        text: "🌐";
+                        font-size: 14px;
+                        vertical-alignment: center;
+                    }
+
+                    ComboBox {
+                        model: available-languages;
+                        current-index <=> current-language-index;
+                        width: 110px;
+                        selected(idx) => { language-changed(current-language-index); }
+                    }
+                }
+            }
+        }
+
+        // ===== 主内容区 =====
+        HorizontalLayout {
+            spacing: Theme.spacing-md;
+            vertical-stretch: 1;
+
+            // ===== 左侧配置区 =====
+            ScrollView {
+                width: 48%;
+
+                VerticalLayout {
+                    spacing: Theme.spacing-md;
+                    padding-right: Theme.spacing-sm;
+
+                    // SMTP 配置卡片
+                    Card {
+                        title: tr-smtp-server;
+
+                        VerticalLayout {
+                            spacing: Theme.spacing-sm;
+
+                            // 服务器地址
+                            HorizontalLayout {
+                                spacing: Theme.spacing-sm;
+                                Text {
+                                    text: tr-server-address;
+                                    min-width: 90px;
+                                    font-size: 13px;
+                                    color: Theme.text-secondary;
+                                    vertical-alignment: center;
+                                }
+                                LineEdit {
+                                    text <=> smtp-server;
+                                    placeholder-text: "smtp.example.com";
+                                    horizontal-stretch: 1;
+                                }
+                            }
+
+                            // 端口
+                            HorizontalLayout {
+                                spacing: Theme.spacing-sm;
+                                Text {
+                                    text: tr-port;
+                                    min-width: 90px;
+                                    font-size: 13px;
+                                    color: Theme.text-secondary;
+                                    vertical-alignment: center;
+                                }
+                                LineEdit { text <=> smtp-port-str; width: 60px; }
+                                SecondaryButton { text: "25"; clicked => { smtp-port-str = "25"; } }
+                                SecondaryButton { text: "465"; clicked => { smtp-port-str = "465"; use-tls = true; } }
+                                SecondaryButton { text: "587"; clicked => { smtp-port-str = "587"; } }
+                            }
+
+                            // TLS 选项
+                            HorizontalLayout {
+                                spacing: Theme.spacing-lg;
+                                CheckBox { text: tr-use-tls; checked <=> use-tls; }
+                                CheckBox { text: tr-accept-invalid-certs; checked <=> accept-invalid-certs; }
+                            }
+
+                            // 认证
+                            CheckBox { text: tr-auth-required; checked <=> auth-mode; }
+
+                            if auth-mode: VerticalLayout {
+                                spacing: Theme.spacing-sm;
+                                HorizontalLayout {
+                                    spacing: Theme.spacing-sm;
+                                    Text {
+                                        text: tr-username;
+                                        min-width: 90px;
+                                        font-size: 13px;
+                                        color: Theme.text-secondary;
+                                        vertical-alignment: center;
+                                    }
+                                    LineEdit { text <=> username; horizontal-stretch: 1; }
+                                }
+                                HorizontalLayout {
+                                    spacing: Theme.spacing-sm;
+                                    Text {
+                                        text: tr-password;
+                                        min-width: 90px;
+                                        font-size: 13px;
+                                        color: Theme.text-secondary;
+                                        vertical-alignment: center;
+                                    }
+                                    LineEdit { text <=> password; input-type: InputType.password; horizontal-stretch: 1; }
+                                }
+                            }
+
+                            // 发件人/收件人
+                            HorizontalLayout {
+                                spacing: Theme.spacing-sm;
+                                Text {
+                                    text: tr-sender;
+                                    min-width: 90px;
+                                    font-size: 13px;
+                                    color: Theme.text-secondary;
+                                    vertical-alignment: center;
+                                }
+                                LineEdit { text <=> from-address; placeholder-text: "sender@example.com"; horizontal-stretch: 1; }
+                            }
+
+                            HorizontalLayout {
+                                spacing: Theme.spacing-sm;
+                                Text {
+                                    text: tr-recipient;
+                                    min-width: 90px;
+                                    font-size: 13px;
+                                    color: Theme.text-secondary;
+                                    vertical-alignment: center;
+                                }
+                                LineEdit { text <=> to-address; placeholder-text: tr-recipient-hint; horizontal-stretch: 1; }
+                            }
+                        }
+                    }
+
+                    // 发送模式卡片
+                    Card {
+                        title: tr-send-mode;
+
+                        VerticalLayout {
+                            spacing: Theme.spacing-sm;
+
+                            // 模式选择按钮
+                            HorizontalLayout {
+                                spacing: Theme.spacing-sm;
+
+                                SecondaryButton {
+                                    text: "📧 " + tr-eml-batch;
+                                    active: send-mode == SendMode.EmlBatch;
+                                    clicked => { send-mode = SendMode.EmlBatch; }
+                                }
+                                SecondaryButton {
+                                    text: "📎 " + tr-single-attachment;
+                                    active: send-mode == SendMode.SingleAttachment;
+                                    clicked => { send-mode = SendMode.SingleAttachment; }
+                                }
+                                SecondaryButton {
+                                    text: "📁 " + tr-dir-attachment;
+                                    active: send-mode == SendMode.DirAttachment;
+                                    clicked => { send-mode = SendMode.DirAttachment; }
+                                }
+                            }
+
+                            // EML 模式
+                            if send-mode == SendMode.EmlBatch: VerticalLayout {
+                                spacing: Theme.spacing-sm;
+                                HorizontalLayout {
+                                    spacing: Theme.spacing-sm;
+                                    Text {
+                                        text: tr-eml-directory;
+                                        min-width: 90px;
+                                        font-size: 13px;
+                                        color: Theme.text-secondary;
+                                        vertical-alignment: center;
+                                    }
+                                    LineEdit { text <=> eml-dir; horizontal-stretch: 1; }
+                                    SecondaryButton { text: tr-browse; clicked => { browse-eml-dir(); } }
+                                }
+                                HorizontalLayout {
+                                    spacing: Theme.spacing-sm;
+                                    Text {
+                                        text: tr-extension;
+                                        min-width: 90px;
+                                        font-size: 13px;
+                                        color: Theme.text-secondary;
+                                        vertical-alignment: center;
+                                    }
+                                    LineEdit { text <=> eml-extension; width: 60px; }
+                                    if eml-file-count > 0: Rectangle {
+                                        background: Theme.success-light;
+                                        border-radius: 4px;
+                                        height: 24px;
+                                        width: 80px;
+                                        Text {
+                                            text: "Found: " + eml-file-count;
+                                            font-size: 12px;
+                                            color: white;
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 单附件模式
+                            if send-mode == SendMode.SingleAttachment: VerticalLayout {
+                                spacing: Theme.spacing-sm;
+                                HorizontalLayout {
+                                    spacing: Theme.spacing-sm;
+                                    Text {
+                                        text: tr-attachment-file;
+                                        min-width: 90px;
+                                        font-size: 13px;
+                                        color: Theme.text-secondary;
+                                        vertical-alignment: center;
+                                    }
+                                    LineEdit { text <=> attachment-path; horizontal-stretch: 1; }
+                                    SecondaryButton { text: tr-browse; clicked => { browse-attachment(); } }
+                                }
+                                HorizontalLayout {
+                                    spacing: Theme.spacing-sm;
+                                    Text {
+                                        text: tr-email-subject;
+                                        min-width: 90px;
+                                        font-size: 13px;
+                                        color: Theme.text-secondary;
+                                        vertical-alignment: center;
+                                    }
+                                    LineEdit { text <=> subject-template; horizontal-stretch: 1; }
+                                }
+                                HorizontalLayout {
+                                    spacing: Theme.spacing-sm;
+                                    Text {
+                                        text: tr-email-body;
+                                        min-width: 90px;
+                                        font-size: 13px;
+                                        color: Theme.text-secondary;
+                                        vertical-alignment: center;
+                                    }
+                                    LineEdit { text <=> text-template; horizontal-stretch: 1; }
+                                }
+                            }
+
+                            // 目录附件模式
+                            if send-mode == SendMode.DirAttachment: VerticalLayout {
+                                spacing: Theme.spacing-sm;
+                                HorizontalLayout {
+                                    spacing: Theme.spacing-sm;
+                                    Text {
+                                        text: tr-attachment-directory;
+                                        min-width: 90px;
+                                        font-size: 13px;
+                                        color: Theme.text-secondary;
+                                        vertical-alignment: center;
+                                    }
+                                    LineEdit { text <=> attachment-dir; horizontal-stretch: 1; }
+                                    SecondaryButton { text: tr-browse; clicked => { browse-attachment-dir(); } }
+                                }
+                                if attachment-file-count > 0: Rectangle {
+                                    background: Theme.success-light;
+                                    border-radius: 4px;
+                                    height: 24px;
+                                    width: 80px;
+                                    Text {
+                                        text: "Found: " + attachment-file-count;
+                                        font-size: 12px;
+                                        color: white;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
+                                }
+                                HorizontalLayout {
+                                    spacing: Theme.spacing-sm;
+                                    Text {
+                                        text: tr-email-subject;
+                                        min-width: 90px;
+                                        font-size: 13px;
+                                        color: Theme.text-secondary;
+                                        vertical-alignment: center;
+                                    }
+                                    LineEdit { text <=> subject-template; horizontal-stretch: 1; }
+                                }
+                                HorizontalLayout {
+                                    spacing: Theme.spacing-sm;
+                                    Text {
+                                        text: tr-email-body;
+                                        min-width: 90px;
+                                        font-size: 13px;
+                                        color: Theme.text-secondary;
+                                        vertical-alignment: center;
+                                    }
+                                    LineEdit { text <=> text-template; horizontal-stretch: 1; }
+                                }
+                            }
+                        }
+                    }
+
+                    // 高级选项卡片
+                    Card {
+                        title: tr-advanced-options;
+
+                        VerticalLayout {
+                            spacing: Theme.spacing-sm;
+
+                            // 性能设置
+                            HorizontalLayout {
+                                spacing: Theme.spacing-lg;
+                                HorizontalLayout {
+                                    spacing: Theme.spacing-xs;
+                                    Text {
+                                        text: tr-processes;
+                                        font-size: 13px;
+                                        color: Theme.text-secondary;
+                                        vertical-alignment: center;
+                                    }
+                                    LineEdit { text <=> processes; width: 50px; }
+                                }
+                                HorizontalLayout {
+                                    spacing: Theme.spacing-xs;
+                                    Text {
+                                        text: tr-batch-size;
+                                        font-size: 13px;
+                                        color: Theme.text-secondary;
+                                        vertical-alignment: center;
+                                    }
+                                    LineEdit { text <=> batch-size-str; width: 50px; }
+                                }
+                                HorizontalLayout {
+                                    spacing: Theme.spacing-xs;
+                                    Text {
+                                        text: tr-timeout;
+                                        font-size: 13px;
+                                        color: Theme.text-secondary;
+                                        vertical-alignment: center;
+                                    }
+                                    LineEdit { text <=> smtp-timeout-str; width: 50px; }
+                                }
+                            }
+
+                            // 循环设置
+                            HorizontalLayout {
+                                spacing: Theme.spacing-lg;
+                                CheckBox { text: tr-infinite-loop; checked <=> loop-mode; }
+                                HorizontalLayout {
+                                    spacing: Theme.spacing-xs;
+                                    Text {
+                                        text: tr-repeat-count;
+                                        font-size: 13px;
+                                        color: Theme.text-secondary;
+                                        vertical-alignment: center;
+                                    }
+                                    LineEdit { text <=> repeat-count-str; width: 50px; enabled: !loop-mode; }
+                                }
+                            }
+
+                            // EML 特有选项
+                            if send-mode == SendMode.EmlBatch: HorizontalLayout {
+                                spacing: Theme.spacing-lg;
+                                CheckBox { text: tr-keep-headers; checked <=> keep-headers; }
+                                CheckBox { text: tr-modify-headers; checked <=> modify-headers; }
+                                CheckBox { text: tr-anonymize-emails; checked <=> anonymize-emails; }
+                            }
+
+                            // 日志级别
+                            HorizontalLayout {
+                                spacing: Theme.spacing-sm;
+                                Text {
+                                    text: tr-log-level;
+                                    font-size: 13px;
+                                    color: Theme.text-secondary;
+                                    vertical-alignment: center;
+                                }
+                                ComboBox {
+                                    model: ["error", "warn", "info", "debug", "trace"];
+                                    current-index: 2;
+                                    width: 90px;
+                                    selected(s) => { log-level = s; }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ===== 右侧监控区 =====
+            VerticalLayout {
+                horizontal-stretch: 1;
+                spacing: Theme.spacing-md;
+
+                // 统计卡片
+                Card {
+                    title: tr-statistics;
+
+                    VerticalLayout {
+                        spacing: Theme.spacing-md;
+
+                        // 统计数字
+                        HorizontalLayout {
+                            spacing: Theme.spacing-sm;
+
+                            StatCard {
+                                horizontal-stretch: 1;
+                                label: tr-total;
+                                value: total-count;
+                                accent-color: Theme.primary;
+                            }
+
+                            StatCard {
+                                horizontal-stretch: 1;
+                                label: tr-success;
+                                value: success-count;
+                                accent-color: Theme.success;
+                            }
+
+                            StatCard {
+                                horizontal-stretch: 1;
+                                label: tr-failed;
+                                value: fail-count;
+                                accent-color: Theme.error;
+                            }
+
+                            StatCard {
+                                horizontal-stretch: 1;
+                                label: "QPS";
+                                value: round(qps * 10) / 10;
+                                accent-color: Theme.warning;
+                            }
+                        }
+
+                        // 进度条
+                        Rectangle {
+                            height: 8px;
+                            border-radius: 4px;
+                            background: Theme.bg-input;
+
+                            Rectangle {
+                                width: parent.width * (total-count > 0 ? (sent-count / total-count) : 0);
+                                height: parent.height;
+                                border-radius: 4px;
+                                background: @linear-gradient(90deg, Theme.primary 0%, Theme.success 100%);
+
+                                animate width { duration: 300ms; easing: ease-out; }
+                            }
+                        }
+
+                        // 轮次和时间
+                        HorizontalLayout {
+                            spacing: Theme.spacing-xl;
+
+                            HorizontalLayout {
+                                spacing: Theme.spacing-xs;
+                                Text {
+                                    text: tr-current-round + ":";
+                                    font-size: 13px;
+                                    color: Theme.text-secondary;
+                                    vertical-alignment: center;
+                                }
+                                Text {
+                                    text: current-round + "/" + total-rounds;
+                                    font-size: 13px;
+                                    font-weight: 600;
+                                    color: Theme.text-primary;
+                                    vertical-alignment: center;
+                                }
+                            }
+
+                            HorizontalLayout {
+                                spacing: Theme.spacing-xs;
+                                Text {
+                                    text: tr-elapsed-time + ":";
+                                    font-size: 13px;
+                                    color: Theme.text-secondary;
+                                    vertical-alignment: center;
+                                }
+                                Text {
+                                    text: elapsed-time;
+                                    font-size: 13px;
+                                    font-weight: 600;
+                                    color: Theme.text-primary;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 日志卡片
+                Card {
+                    title: tr-send-log;
+                    vertical-stretch: 1;
+
+                    VerticalLayout {
+                        spacing: Theme.spacing-sm;
+
+                        ScrollView {
+                            vertical-stretch: 1;
+
+                            VerticalLayout {
+                                spacing: Theme.spacing-xs;
+                                padding: Theme.spacing-xs;
+
+                                for entry in logs: LogItem {
+                                    timestamp: entry.timestamp;
+                                    level: entry.level;
+                                    message: entry.message;
+                                }
+                            }
+                        }
+
+                        HorizontalLayout {
+                            spacing: Theme.spacing-sm;
+                            SecondaryButton { text: tr-clear; clicked => { clear-logs(); } }
+                            SecondaryButton { text: tr-export-log; clicked => { export-logs(); } }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ===== 底部操作栏 =====
+        Rectangle {
+            height: 56px;
+            background: Theme.bg-card;
+            border-radius: Theme.radius-lg;
+            drop-shadow-blur: 8px;
+            drop-shadow-color: Theme.shadow;
+            drop-shadow-offset-y: -2px;
+
+            HorizontalLayout {
+                padding-left: Theme.spacing-lg;
+                padding-right: Theme.spacing-lg;
+                spacing: Theme.spacing-md;
+
+                // 状态指示器
+                HorizontalLayout {
+                    spacing: Theme.spacing-sm;
+
+                    Rectangle {
+                        width: 10px;
+                        height: 10px;
+                        border-radius: 5px;
+                        background: status == SendStatus.Idle ? Theme.text-muted :
+                                   (status == SendStatus.Sending ? Theme.success :
+                                   (status == SendStatus.Completed ? Theme.primary : Theme.warning));
+
+                        // 发送中闪烁动画
+                        opacity: 1.0;
+                        animate opacity { duration: 500ms; }
+                    }
+
+                    Text {
+                        text: status-text;
+                        font-size: 13px;
+                        font-weight: 500;
+                        color: Theme.text-primary;
+                        vertical-alignment: center;
+                    }
+                }
+
+                // 成功/失败计数
+                HorizontalLayout {
+                    spacing: Theme.spacing-md;
+
+                    HorizontalLayout {
+                        spacing: Theme.spacing-xs;
+                        Text {
+                            text: "✓";
+                            font-size: 14px;
+                            color: Theme.success;
+                            vertical-alignment: center;
+                        }
+                        Text {
+                            text: success-count;
+                            font-size: 13px;
+                            font-weight: 600;
+                            color: Theme.success;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: Theme.spacing-xs;
+                        Text {
+                            text: "✗";
+                            font-size: 14px;
+                            color: Theme.error;
+                            vertical-alignment: center;
+                        }
+                        Text {
+                            text: fail-count;
+                            font-size: 13px;
+                            font-weight: 600;
+                            color: Theme.error;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                Rectangle { horizontal-stretch: 1; }
+
+                // 操作按钮
+                HorizontalLayout {
+                    spacing: Theme.spacing-sm;
+
+                    SecondaryButton {
+                        text: tr-save-config;
+                        enabled: status != SendStatus.Sending;
+                        clicked => { save-config(); }
+                    }
+                    SecondaryButton {
+                        text: tr-load-config;
+                        enabled: status != SendStatus.Sending;
+                        clicked => { load-config(); }
+                    }
+                    SecondaryButton {
+                        text: tr-test-connection;
+                        enabled: status != SendStatus.Sending;
+                        clicked => { test-connection(); }
+                    }
+                    PrimaryButton {
+                        text: status == SendStatus.Sending ? tr-stop-send : tr-start-send;
+                        active: status != SendStatus.Sending;
+                        clicked => {
+                            if status == SendStatus.Sending {
+                                stop-send();
+                            } else {
+                                start-send();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ===== 消息对话框 =====
+    if show-message-dialog: Rectangle {
+        background: #00000066;
+        width: 100%;
+        height: 100%;
+
+        TouchArea {
+            clicked => { close-message-dialog(); }
+        }
+
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: min(420px, parent.width - 40px);
+            height: 220px;
+            background: Theme.bg-card;
+            border-radius: Theme.radius-xl;
+            drop-shadow-blur: 32px;
+            drop-shadow-color: Theme.shadow-dark;
+            drop-shadow-offset-y: 8px;
+
+            TouchArea {
+                // 阻止点击穿透
+            }
+
+            VerticalLayout {
+                padding: Theme.spacing-xl;
+                spacing: Theme.spacing-lg;
+
+                // 标题
+                HorizontalLayout {
+                    spacing: Theme.spacing-md;
+
+                    Rectangle {
+                        width: 40px;
+                        height: 40px;
+                        border-radius: 20px;
+                        background: message-dialog-is-error ?
+                            @linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%) :
+                            @linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+
+                        Text {
+                            text: message-dialog-is-error ? "⚠" : "✓";
+                            font-size: 20px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    Text {
+                        text: message-dialog-title;
+                        font-size: 18px;
+                        font-weight: 700;
+                        color: message-dialog-is-error ? Theme.error : Theme.success;
+                        vertical-alignment: center;
+                    }
+                }
+
+                // 内容
+                Text {
+                    text: message-dialog-content;
+                    font-size: 14px;
+                    color: Theme.text-primary;
+                    wrap: word-wrap;
+                    vertical-stretch: 1;
+                }
+
+                // 按钮
+                HorizontalLayout {
+                    Rectangle { horizontal-stretch: 1; }
+
+                    PrimaryButton {
+                        text: "OK";
+                        active: true;
+                        clicked => { close-message-dialog(); }
+                    }
+                }
+            }
+        }
+    }
+}

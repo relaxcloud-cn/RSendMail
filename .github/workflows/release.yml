@@ -1,109 +1,192 @@
 name: Release
+
 on:
   push:
     tags:
       - 'v*'
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
-    - name: Set up Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
-    - name: Build for Linux
-      working-directory: rsendmail
-      run: cargo build --release
-      env:
-        CARGO_TARGET_DIR: target/linux
-    - name: Install Windows target
-      run: rustup target add x86_64-pc-windows-gnu
-    - name: Install MinGW toolchain
-      run: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-x86-64
-    - name: Build for Windows
-      working-directory: rsendmail
-      run: cargo build --release --target x86_64-pc-windows-gnu
-    - name: Install macOS target
-      run: rustup target add x86_64-apple-darwin
-    - name: Install osxcross
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y clang llvm lld cmake libxml2-dev
-        git clone https://github.com/tpoechtrager/osxcross.git
-        cd osxcross
-        wget -nc https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz
-        mv MacOSX11.3.sdk.tar.xz tarballs/
-        UNATTENDED=1 OSX_VERSION_MIN=10.12 ./build.sh
-        echo "$(pwd)/target/bin" >> $GITHUB_PATH
-    - name: Set up Rust for macOS cross-compilation
-      run: |
-        echo "CC=o64-clang" >> $GITHUB_ENV
-        echo "CXX=o64-clang++" >> $GITHUB_ENV
-        echo "AR=x86_64-apple-darwin20.4-ar" >> $GITHUB_ENV
-        echo "RUSTFLAGS=-C linker=o64-clang" >> $GITHUB_ENV
-    - name: Build for macOS
-      working-directory: rsendmail
-      run: cargo build --release --target x86_64-apple-darwin
-    - name: Package artifacts
-      working-directory: rsendmail
-      run: |
-        mkdir -p dist
-        cp target/linux/release/rsendmail dist/rsendmail-linux-x86_64
-        cp target/x86_64-pc-windows-gnu/release/rsendmail.exe dist/rsendmail-windows-x86_64.exe
-        cp target/x86_64-apple-darwin/release/rsendmail dist/rsendmail-darwin-x86_64
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: binaries
-        path: rsendmail/dist
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions: write-all
-    steps:
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: binaries
-        path: rsendmail/dist
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref_name }} 
-        release_name: Release ${{ github.ref_name }}
-        draft: false
-        prerelease: false
-    - name: Upload Release Assets
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: rsendmail/dist/rsendmail-linux-x86_64
-        asset_name: rsendmail-linux-x86_64
-        asset_content_type: application/octet-stream
-    - name: Upload Release Assets
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: rsendmail/dist/rsendmail-windows-x86_64.exe
-        asset_name: rsendmail-windows-x86_64.exe
-        asset_content_type: application/octet-stream
-    - name: Upload Release Assets
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: rsendmail/dist/rsendmail-darwin-x86_64
-        asset_name: rsendmail-darwin-x86_64
-        asset_content_type: application/octet-stream
 
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Linux 构建 (CLI + GUI)
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfontconfig1-dev libfreetype6-dev
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build CLI
+        run: cargo build --release -p rsendmail-cli
+
+      - name: Build GUI
+        run: cargo build --release -p rsendmail-gui
+
+      - name: Package artifacts
+        run: |
+          mkdir -p dist
+          cp target/release/rsendmail-cli dist/rsendmail-cli-linux-x86_64
+          cp target/release/rsendmail-gui dist/rsendmail-gui-linux-x86_64
+          chmod +x dist/*
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-binaries
+          path: dist/
+
+  # Windows 构建 (CLI + GUI)
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build CLI
+        run: cargo build --release -p rsendmail-cli
+
+      - name: Build GUI
+        run: cargo build --release -p rsendmail-gui
+
+      - name: Package artifacts
+        run: |
+          mkdir dist
+          copy target\release\rsendmail-cli.exe dist\rsendmail-cli-windows-x86_64.exe
+          copy target\release\rsendmail-gui.exe dist\rsendmail-gui-windows-x86_64.exe
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-binaries
+          path: dist/
+
+  # macOS 构建 (CLI + GUI) - Intel
+  build-macos-intel:
+    runs-on: macos-13
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build CLI
+        run: cargo build --release -p rsendmail-cli
+
+      - name: Build GUI
+        run: cargo build --release -p rsendmail-gui
+
+      - name: Package artifacts
+        run: |
+          mkdir -p dist
+          cp target/release/rsendmail-cli dist/rsendmail-cli-darwin-x86_64
+          cp target/release/rsendmail-gui dist/rsendmail-gui-darwin-x86_64
+          chmod +x dist/*
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-intel-binaries
+          path: dist/
+
+  # macOS 构建 (CLI + GUI) - Apple Silicon
+  build-macos-arm:
+    runs-on: macos-14
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build CLI
+        run: cargo build --release -p rsendmail-cli
+
+      - name: Build GUI
+        run: cargo build --release -p rsendmail-gui
+
+      - name: Package artifacts
+        run: |
+          mkdir -p dist
+          cp target/release/rsendmail-cli dist/rsendmail-cli-darwin-arm64
+          cp target/release/rsendmail-gui dist/rsendmail-gui-darwin-arm64
+          chmod +x dist/*
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm-binaries
+          path: dist/
+
+  # 创建 Release
+  release:
+    needs: [build-linux, build-windows, build-macos-intel, build-macos-arm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-binaries
+          path: dist/
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-binaries
+          path: dist/
+
+      - name: Download macOS Intel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-intel-binaries
+          path: dist/
+
+      - name: Download macOS ARM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-arm-binaries
+          path: dist/
+
+      - name: List artifacts
+        run: ls -la dist/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/rsendmail-cli-linux-x86_64
+            dist/rsendmail-gui-linux-x86_64
+            dist/rsendmail-cli-windows-x86_64.exe
+            dist/rsendmail-gui-windows-x86_64.exe
+            dist/rsendmail-cli-darwin-x86_64
+            dist/rsendmail-gui-darwin-x86_64
+            dist/rsendmail-cli-darwin-arm64
+            dist/rsendmail-gui-darwin-arm64
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

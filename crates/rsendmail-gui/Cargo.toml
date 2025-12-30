@@ -1,0 +1,26 @@
+[package]
+name = "rsendmail-gui"
+description = "GUI application for RSendMail - powered by Slint"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "rsendmail-gui"
+path = "src/main.rs"
+
+[dependencies]
+rsendmail-core = { path = "../rsendmail-core" }
+tokio = { workspace = true }
+slint = { workspace = true }
+rfd = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+log = { workspace = true }
+simplelog = { workspace = true }
+chrono = { workspace = true }
+walkdir = { workspace = true }
+
+[build-dependencies]
+slint-build = "1.9"

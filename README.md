@@ -11,6 +11,7 @@ English | [简体中文](README_zh.md)
 
 ## Features
 
+- **CLI & GUI**: Both command-line and graphical user interface available
 - Batch processing and sending of multiple emails
 - Multi-threaded processing for improved performance
 - Custom SMTP server configuration
@@ -20,13 +21,32 @@ English | [简体中文](README_zh.md)
 - Batch sending in a single SMTP session
 - Support for sending regular files as attachments
 - Support for sending all files in a directory as separate emails
+- **Multi-language support**: English, Simplified Chinese, Traditional Chinese, Japanese
+
+## Downloads
+
+Download pre-built binaries from the [Releases](https://github.com/kpassy/RSendMail/releases) page:
+
+| Platform | CLI | GUI |
+|----------|-----|-----|
+| Linux x86_64 | `rsendmail-cli-linux-x86_64` | `rsendmail-gui-linux-x86_64` |
+| Windows x86_64 | `rsendmail-cli-windows-x86_64.exe` | `rsendmail-gui-windows-x86_64.exe` |
+| macOS Intel | `rsendmail-cli-darwin-x86_64` | `rsendmail-gui-darwin-x86_64` |
+| macOS Apple Silicon | `rsendmail-cli-darwin-arm64` | `rsendmail-gui-darwin-arm64` |
 
 ## Build
 
 ### Local Build
+
 ```bash
-cd rsendmail
-cargo build --release
+# Build CLI only
+cargo build --release -p rsendmail-cli
+
+# Build GUI only
+cargo build --release -p rsendmail-gui
+
+# Build all
+cargo build --release --workspace
 ```
 
 ### Docker Build
@@ -34,10 +54,29 @@ cargo build --release
 docker build -t rsendmail .
 ```
 
-## Usage
+## GUI Usage
 
-### Windows Usage
-Download Windows executable (`rsendmail-windows-x86_64.exe`) from the [Releases](https://github.com/kpassy/RSendMail/releases) page.
+Simply run the GUI executable:
+```bash
+# Linux/macOS
+./rsendmail-gui
+
+# Windows
+rsendmail-gui.exe
+```
+
+The GUI supports:
+- Visual configuration of all SMTP settings
+- Three sending modes: EML batch, single attachment, directory attachment
+- Real-time statistics and progress monitoring
+- Log viewing and export
+- Save/load configuration
+- Multi-language interface (English, 简体中文, 繁體中文, 日本語)
+
+## CLI Usage
+
+### Windows
+Download Windows executable (`rsendmail-cli-windows-x86_64.exe`) from the [Releases](https://github.com/kpassy/RSendMail/releases) page.
 ```bash
 rsendmail-windows-x86_64.exe --smtp-server <smtp_server> --port <port> --from <sender> --to <recipient> --dir <email_directory> --processes <num_processes> --batch-size <batch_size>
 ```

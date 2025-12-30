@@ -1,0 +1,53 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/rsendmail-core",
+    "crates/rsendmail-cli",
+    "crates/rsendmail-gui",
+]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
+authors = ["RSendMail Contributors"]
+license = "MIT"
+
+[workspace.dependencies]
+# 异步运行时
+tokio = { version = "1.35", features = ["full"] }
+futures = "0.3"
+
+# 邮件处理
+mail-send = "0.5"
+mail-parser = "0.10"
+mail-builder = "0.3"
+
+# 序列化
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# 错误处理
+anyhow = "1.0"
+thiserror = "1.0"
+
+# 日志
+log = "0.4"
+
+# 文件系统
+walkdir = "2.5"
+
+# 其他工具
+regex = "1.10"
+rand = "0.8"
+chrono = "0.4"
+num_cpus = "1.16"
+infer = "0.15"
+
+# CLI 专用
+clap = { version = "4.5", features = ["derive"] }
+simplelog = "0.12"
+ctrlc = "3.4"
+
+# GUI 专用
+slint = "1.9"
+rfd = "0.15"

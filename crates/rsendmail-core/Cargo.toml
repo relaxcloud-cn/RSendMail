@@ -1,0 +1,24 @@
+[package]
+name = "rsendmail-core"
+description = "Core library for RSendMail - email sending engine"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+futures = { workspace = true }
+mail-send = { workspace = true }
+mail-parser = { workspace = true }
+mail-builder = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+walkdir = { workspace = true }
+regex = { workspace = true }
+rand = { workspace = true }
+chrono = { workspace = true }
+num_cpus = { workspace = true }
+infer = { workspace = true }

@@ -1,0 +1,19 @@
+[package]
+name = "rsendmail-cli"
+description = "Command-line interface for RSendMail"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "rsendmail"
+path = "src/main.rs"
+
+[dependencies]
+rsendmail-core = { path = "../rsendmail-core" }
+tokio = { workspace = true }
+clap = { workspace = true }
+simplelog = { workspace = true }
+ctrlc = { workspace = true }
+log = { workspace = true }
+anyhow = { workspace = true }
