@@ -36,7 +36,7 @@ jobs:
       - name: Package artifacts
         run: |
           mkdir -p dist
-          cp target/release/rsendmail-cli dist/rsendmail-cli-linux-x86_64
+          cp target/release/rsendmail dist/rsendmail-cli-linux-x86_64
           cp target/release/rsendmail-gui dist/rsendmail-gui-linux-x86_64
           chmod +x dist/*
 
@@ -68,7 +68,7 @@ jobs:
       - name: Package artifacts
         run: |
           mkdir dist
-          copy target\release\rsendmail-cli.exe dist\rsendmail-cli-windows-x86_64.exe
+          copy target\release\rsendmail.exe dist\rsendmail-cli-windows-x86_64.exe
           copy target\release\rsendmail-gui.exe dist\rsendmail-gui-windows-x86_64.exe
 
       - name: Upload artifacts
@@ -99,7 +99,7 @@ jobs:
       - name: Package artifacts
         run: |
           mkdir -p dist
-          cp target/release/rsendmail-cli dist/rsendmail-cli-darwin-x86_64
+          cp target/release/rsendmail dist/rsendmail-cli-darwin-x86_64
           cp target/release/rsendmail-gui dist/rsendmail-gui-darwin-x86_64
           chmod +x dist/*
 
@@ -131,7 +131,7 @@ jobs:
       - name: Package artifacts
         run: |
           mkdir -p dist
-          cp target/release/rsendmail-cli dist/rsendmail-cli-darwin-arm64
+          cp target/release/rsendmail dist/rsendmail-cli-darwin-arm64
           cp target/release/rsendmail-gui dist/rsendmail-gui-darwin-arm64
           chmod +x dist/*
 
