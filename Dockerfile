@@ -1,24 +1,20 @@
-# 第一阶段：依赖缓存层
-FROM rust:1.86-slim as cacher
+# Build stage
+FROM rust:1.86-slim AS builder
 WORKDIR /usr/src/app
-COPY Cargo.toml Cargo.lock* ./
-COPY crates/ ./crates/
-RUN rm -f Cargo.lock && \
-    # Create dummy source files to cache dependencies
-    echo "fn main() {}" > crates/rsendmail-cli/src/main.rs && \
-    echo "" > crates/rsendmail-core/src/lib.rs && \
-    cargo fetch
 
-# 第二阶段：构建层
-FROM rust:1.86-slim as builder
-WORKDIR /usr/src/app
-COPY --from=cacher /usr/local/cargo /usr/local/cargo
-COPY Cargo.toml Cargo.lock* ./
-COPY crates/ ./crates/
-RUN rm -f Cargo.lock && \
-    cargo build --release -p rsendmail-cli --offline
+# Install build dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends pkg-config libssl-dev && \
+    rm -rf /var/lib/apt/lists/*
 
-# 第三阶段：运行层
+# Copy source code
+COPY Cargo.toml ./
+COPY crates/ ./crates/
+
+# Build the CLI
+RUN cargo build --release -p rsendmail-cli
+
+# Runtime stage
 FROM debian:bookworm-slim
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -29,8 +25,8 @@ RUN apt-get update && \
     mkdir /data && \
     chown rsendmail:rsendmail /data
 
-# 只复制必要的二进制文件
-COPY --from=builder /usr/src/app/target/release/rsendmail /usr/local/bin/
+# Copy the binary
+COPY --from=builder /usr/src/app/target/release/rsendmail-cli /usr/local/bin/rsendmail
 
 USER rsendmail
 WORKDIR /data
