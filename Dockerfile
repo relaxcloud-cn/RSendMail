@@ -1,5 +1,5 @@
 # Build stage
-FROM rust:1.86-slim AS builder
+FROM rust:1.87-slim AS builder
 WORKDIR /usr/src/app
 
 # Install build dependencies
@@ -26,7 +26,7 @@ RUN apt-get update && \
     chown rsendmail:rsendmail /data
 
 # Copy the binary
-COPY --from=builder /usr/src/app/target/release/rsendmail-cli /usr/local/bin/rsendmail
+COPY --from=builder /usr/src/app/target/release/rsendmail /usr/local/bin/rsendmail
 
 USER rsendmail
 WORKDIR /data
