@@ -1,174 +1,312 @@
-use clap::Parser;
+//! CLI argument parsing with internationalization support
+//!
+//! This module uses clap's builder API instead of derive macros
+//! to enable runtime i18n for help text.
+
+use clap::{Arg, ArgAction, ArgMatches, Command};
 use rsendmail_core::Config;
+use rsendmail_i18n::{tr, Language};
 
-/// A high-performance bulk email sending CLI tool
-#[derive(Parser, Debug, Clone)]
-#[command(author, version, about, long_about = None)]
-pub struct CliArgs {
-    /// SMTP服务器地址
-    #[arg(long)]
-    pub smtp_server: String,
-
-    /// SMTP服务器端口
-    #[arg(long, default_value_t = 25)]
-    pub port: u16,
-
-    /// 发件人邮箱地址
-    #[arg(long)]
-    pub from: String,
-
-    /// 收件人邮箱地址 (多个地址请用逗号分隔)
-    #[arg(long)]
-    pub to: String,
-
-    /// 邮件文件所在目录
-    #[arg(long, required_unless_present_any = ["attachment", "attachment_dir"])]
-    pub dir: Option<String>,
-
-    /// 邮件文件扩展名
-    #[arg(long, default_value = "eml")]
-    pub extension: String,
-
-    /// 进程数，auto表示自动设置为CPU核心数，或者指定具体数字
-    #[arg(long, default_value = "auto")]
-    pub processes: String,
-
-    /// 每个SMTP会话连续发送的邮件数量
-    #[arg(long, default_value_t = 1)]
-    pub batch_size: usize,
-
-    /// SMTP会话超时时间（秒）
-    #[arg(long, default_value_t = 30)]
-    pub smtp_timeout: u64,
-
-    /// 日志级别 (error/warn/info/debug/trace)
-    #[arg(long, default_value = "info")]
-    pub log_level: String,
-
-    /// 是否保留原始邮件头
-    #[arg(long, default_value_t = false)]
-    pub keep_headers: bool,
-
-    /// 是否匿名化邮箱地址
-    #[arg(long, default_value_t = false)]
-    pub anonymize_emails: bool,
-
-    /// 邮箱匿名化域名（例如：example.com），匿名化后的邮箱将变为随机字符@domain
-    #[arg(long, default_value = "example.com")]
-    pub anonymize_domain: String,
-
-    /// 是否使用--from和--to参数修改邮件头中的From和To
-    #[arg(long, default_value_t = false)]
-    pub modify_headers: bool,
-
-    /// 是否无限循环发送（直到用户中断）
-    #[arg(long, default_value_t = false)]
-    pub r#loop: bool,
-
-    /// 重复发送次数
-    #[arg(long, default_value_t = 1)]
-    pub repeat: u32,
-
-    /// 循环发送的间隔时间（秒）
-    #[arg(long, default_value_t = 1)]
-    pub loop_interval: u64,
-
-    /// 发送失败后重试的间隔时间（秒）
-    #[arg(long, default_value_t = 5)]
-    pub retry_interval: u64,
-
-    /// 附件文件路径，用于发送普通文件作为附件
-    #[arg(long)]
-    pub attachment: Option<String>,
-
-    /// 附件目录路径，发送目录下所有文件为单独的邮件
-    #[arg(long)]
-    pub attachment_dir: Option<String>,
-
-    /// 主题模板，支持变量 {filename}
-    #[arg(long)]
-    pub subject_template: Option<String>,
-
-    /// 文本内容模板，支持变量 {filename}
-    #[arg(long)]
-    pub text_template: Option<String>,
-
-    /// HTML内容模板，支持变量 {filename}
-    #[arg(long)]
-    pub html_template: Option<String>,
-
-    #[arg(
-        long,
-        value_parser,
-        default_value_t = 0,
-        help = "Interval in milliseconds between sending each email in a batch."
-    )]
-    pub email_send_interval_ms: u64,
-
-    /// 是否使用邮箱账号登录模式（通过用户名和密码验证发送邮件）
-    #[arg(long, default_value_t = false)]
-    pub auth_mode: bool,
-
-    /// 邮箱账号用户名（仅在auth_mode=true时需要）
-    #[arg(long)]
-    pub username: Option<String>,
-
-    /// 邮箱账号密码（仅在auth_mode=true时需要）
-    #[arg(long)]
-    pub password: Option<String>,
-
-    /// 使用TLS加密连接 (为了兼容大多数SMTP服务器，当端口是465时将自动启用)
-    #[arg(long, default_value_t = false)]
-    pub use_tls: bool,
-
-    /// 是否接受无效的证书
-    #[arg(long, default_value_t = false)]
-    pub accept_invalid_certs: bool,
-
-    /// 发送失败的EML文件保存目录
-    #[arg(long)]
-    pub failed_emails_dir: Option<String>,
-
-    /// 日志文件保存路径（如果指定，日志会同时输出到控制台和文件）
-    #[arg(long)]
-    pub log_file: Option<String>,
+/// Build the CLI command with localized help text
+pub fn build_cli() -> Command {
+    Command::new("rsendmail")
+        .version(env!("CARGO_PKG_VERSION"))
+        .author("RSendMail Contributors")
+        .about(tr("cli.about"))
+        // Required arguments
+        .arg(
+            Arg::new("smtp_server")
+                .long("smtp-server")
+                .help(tr("cli.smtp_server"))
+                .required(true),
+        )
+        .arg(
+            Arg::new("from")
+                .long("from")
+                .help(tr("cli.from"))
+                .required(true),
+        )
+        .arg(
+            Arg::new("to")
+                .long("to")
+                .help(tr("cli.to"))
+                .required(true),
+        )
+        // Optional arguments with defaults
+        .arg(
+            Arg::new("port")
+                .long("port")
+                .help(tr("cli.port"))
+                .default_value("25"),
+        )
+        .arg(
+            Arg::new("dir")
+                .long("dir")
+                .help(tr("cli.dir"))
+                .required_unless_present_any(["attachment", "attachment_dir"]),
+        )
+        .arg(
+            Arg::new("extension")
+                .long("extension")
+                .help(tr("cli.extension"))
+                .default_value("eml"),
+        )
+        .arg(
+            Arg::new("processes")
+                .long("processes")
+                .help(tr("cli.processes"))
+                .default_value("auto"),
+        )
+        .arg(
+            Arg::new("batch_size")
+                .long("batch-size")
+                .help(tr("cli.batch_size"))
+                .default_value("1"),
+        )
+        .arg(
+            Arg::new("smtp_timeout")
+                .long("smtp-timeout")
+                .help(tr("cli.smtp_timeout"))
+                .default_value("30"),
+        )
+        .arg(
+            Arg::new("log_level")
+                .long("log-level")
+                .help(tr("cli.log_level"))
+                .default_value("info"),
+        )
+        // Boolean flags
+        .arg(
+            Arg::new("keep_headers")
+                .long("keep-headers")
+                .help(tr("cli.keep_headers"))
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("anonymize_emails")
+                .long("anonymize-emails")
+                .help(tr("cli.anonymize_emails"))
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("anonymize_domain")
+                .long("anonymize-domain")
+                .help(tr("cli.anonymize_domain"))
+                .default_value("example.com"),
+        )
+        .arg(
+            Arg::new("modify_headers")
+                .long("modify-headers")
+                .help(tr("cli.modify_headers"))
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("loop")
+                .long("loop")
+                .help(tr("cli.loop"))
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("repeat")
+                .long("repeat")
+                .help(tr("cli.repeat"))
+                .default_value("1"),
+        )
+        .arg(
+            Arg::new("loop_interval")
+                .long("loop-interval")
+                .help(tr("cli.loop_interval"))
+                .default_value("1"),
+        )
+        .arg(
+            Arg::new("retry_interval")
+                .long("retry-interval")
+                .help(tr("cli.retry_interval"))
+                .default_value("5"),
+        )
+        // Attachment options
+        .arg(
+            Arg::new("attachment")
+                .long("attachment")
+                .help(tr("cli.attachment")),
+        )
+        .arg(
+            Arg::new("attachment_dir")
+                .long("attachment-dir")
+                .help(tr("cli.attachment_dir")),
+        )
+        // Template options
+        .arg(
+            Arg::new("subject_template")
+                .long("subject-template")
+                .help(tr("cli.subject_template")),
+        )
+        .arg(
+            Arg::new("text_template")
+                .long("text-template")
+                .help(tr("cli.text_template")),
+        )
+        .arg(
+            Arg::new("html_template")
+                .long("html-template")
+                .help(tr("cli.html_template")),
+        )
+        .arg(
+            Arg::new("email_send_interval_ms")
+                .long("email-send-interval-ms")
+                .help(tr("cli.email_send_interval_ms"))
+                .default_value("0"),
+        )
+        // Authentication options
+        .arg(
+            Arg::new("auth_mode")
+                .long("auth-mode")
+                .help(tr("cli.auth_mode"))
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("username")
+                .long("username")
+                .help(tr("cli.username")),
+        )
+        .arg(
+            Arg::new("password")
+                .long("password")
+                .help(tr("cli.password")),
+        )
+        // TLS options
+        .arg(
+            Arg::new("use_tls")
+                .long("use-tls")
+                .help(tr("cli.use_tls"))
+                .action(ArgAction::SetTrue),
+        )
+        .arg(
+            Arg::new("accept_invalid_certs")
+                .long("accept-invalid-certs")
+                .help(tr("cli.accept_invalid_certs"))
+                .action(ArgAction::SetTrue),
+        )
+        // Logging options
+        .arg(
+            Arg::new("failed_emails_dir")
+                .long("failed-emails-dir")
+                .help(tr("cli.failed_emails_dir")),
+        )
+        .arg(
+            Arg::new("log_file")
+                .long("log-file")
+                .help(tr("cli.log_file")),
+        )
+        // Language option (parsed early, before other args)
+        .arg(
+            Arg::new("lang")
+                .long("lang")
+                .help(tr("cli.lang"))
+                .env("RSENDMAIL_LANG"),
+        )
 }
 
-impl CliArgs {
-    /// 转换为 core 库的配置结构
-    pub fn into_config(self) -> Config {
-        Config {
-            smtp_server: self.smtp_server,
-            port: self.port,
-            from: self.from,
-            to: self.to,
-            dir: self.dir,
-            extension: self.extension,
-            processes: self.processes,
-            batch_size: self.batch_size,
-            smtp_timeout: self.smtp_timeout,
-            log_level: self.log_level,
-            keep_headers: self.keep_headers,
-            anonymize_emails: self.anonymize_emails,
-            anonymize_domain: self.anonymize_domain,
-            modify_headers: self.modify_headers,
-            r#loop: self.r#loop,
-            repeat: self.repeat,
-            loop_interval: self.loop_interval,
-            retry_interval: self.retry_interval,
-            attachment: self.attachment,
-            attachment_dir: self.attachment_dir,
-            subject_template: self.subject_template,
-            text_template: self.text_template,
-            html_template: self.html_template,
-            email_send_interval_ms: self.email_send_interval_ms,
-            auth_mode: self.auth_mode,
-            username: self.username,
-            password: self.password,
-            use_tls: self.use_tls,
-            accept_invalid_certs: self.accept_invalid_certs,
-            failed_emails_dir: self.failed_emails_dir,
-            log_file: self.log_file,
+/// Detect language from command line args or environment
+/// This is called before full CLI parsing to set the language
+pub fn detect_language() -> Language {
+    // First check environment variable
+    if let Ok(lang_str) = std::env::var("RSENDMAIL_LANG") {
+        if let Some(lang) = Language::from_str(&lang_str) {
+            return lang;
         }
+    }
+
+    // Then check command line args for --lang
+    let args: Vec<String> = std::env::args().collect();
+    for i in 0..args.len() {
+        if args[i] == "--lang" && i + 1 < args.len() {
+            if let Some(lang) = Language::from_str(&args[i + 1]) {
+                return lang;
+            }
+        }
+        if args[i].starts_with("--lang=") {
+            let lang_str = args[i].strip_prefix("--lang=").unwrap();
+            if let Some(lang) = Language::from_str(lang_str) {
+                return lang;
+            }
+        }
+    }
+
+    // Fall back to system language detection
+    Language::from_system()
+}
+
+/// Parse CLI arguments and return Config
+pub fn parse_args() -> Config {
+    let matches = build_cli().get_matches();
+    matches_to_config(&matches)
+}
+
+/// Convert ArgMatches to Config
+fn matches_to_config(matches: &ArgMatches) -> Config {
+    Config {
+        smtp_server: matches.get_one::<String>("smtp_server").unwrap().clone(),
+        port: matches
+            .get_one::<String>("port")
+            .unwrap()
+            .parse()
+            .unwrap_or(25),
+        from: matches.get_one::<String>("from").unwrap().clone(),
+        to: matches.get_one::<String>("to").unwrap().clone(),
+        dir: matches.get_one::<String>("dir").cloned(),
+        extension: matches.get_one::<String>("extension").unwrap().clone(),
+        processes: matches.get_one::<String>("processes").unwrap().clone(),
+        batch_size: matches
+            .get_one::<String>("batch_size")
+            .unwrap()
+            .parse()
+            .unwrap_or(1),
+        smtp_timeout: matches
+            .get_one::<String>("smtp_timeout")
+            .unwrap()
+            .parse()
+            .unwrap_or(30),
+        log_level: matches.get_one::<String>("log_level").unwrap().clone(),
+        keep_headers: matches.get_flag("keep_headers"),
+        anonymize_emails: matches.get_flag("anonymize_emails"),
+        anonymize_domain: matches
+            .get_one::<String>("anonymize_domain")
+            .unwrap()
+            .clone(),
+        modify_headers: matches.get_flag("modify_headers"),
+        r#loop: matches.get_flag("loop"),
+        repeat: matches
+            .get_one::<String>("repeat")
+            .unwrap()
+            .parse()
+            .unwrap_or(1),
+        loop_interval: matches
+            .get_one::<String>("loop_interval")
+            .unwrap()
+            .parse()
+            .unwrap_or(1),
+        retry_interval: matches
+            .get_one::<String>("retry_interval")
+            .unwrap()
+            .parse()
+            .unwrap_or(5),
+        attachment: matches.get_one::<String>("attachment").cloned(),
+        attachment_dir: matches.get_one::<String>("attachment_dir").cloned(),
+        subject_template: matches.get_one::<String>("subject_template").cloned(),
+        text_template: matches.get_one::<String>("text_template").cloned(),
+        html_template: matches.get_one::<String>("html_template").cloned(),
+        email_send_interval_ms: matches
+            .get_one::<String>("email_send_interval_ms")
+            .unwrap()
+            .parse()
+            .unwrap_or(0),
+        auth_mode: matches.get_flag("auth_mode"),
+        username: matches.get_one::<String>("username").cloned(),
+        password: matches.get_one::<String>("password").cloned(),
+        use_tls: matches.get_flag("use_tls"),
+        accept_invalid_certs: matches.get_flag("accept_invalid_certs"),
+        failed_emails_dir: matches.get_one::<String>("failed_emails_dir").cloned(),
+        log_file: matches.get_one::<String>("log_file").cloned(),
     }
 }

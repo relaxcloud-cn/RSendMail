@@ -1,185 +1,81 @@
-import { Button, LineEdit, CheckBox, ComboBox, ProgressIndicator, VerticalBox, HorizontalBox, GroupBox, ScrollView, Palette, StyleMetrics } from "std-widgets.slint";
+// RSendMail GUI - Material Design 3
+// Copyright (c) 2024 RSendMail Authors
 
-// 嵌入 CJK 字体子集 (只包含 UI 所需的 ~330 个字符，约 160KB)
-import "../fonts/NotoSansSC-Subset.otf";
+// Material Components
+import {
+    FilledButton,
+    TextButton,
+    TonalButton,
+    OutlinedCard,
+    FilledCard,
+    ElevatedCard,
+    TextField,
+    Switch,
+    CheckBox,
+    LinearProgressIndicator,
+    ScrollView,
+    MaterialPalette,
+    MaterialStyleMetrics,
+    MaterialTypography,
+    MaterialText,
+    SegmentedButton,
+    ListTile,
+} from "@material";
 
-// ===== 主题系统 =====
-global Theme {
-    // 主色调
-    out property <color> primary: #2563eb;
-    out property <color> primary-light: #3b82f6;
-    out property <color> primary-dark: #1d4ed8;
+// Standard widgets (for components not in Material library)
+import { ComboBox, Palette, Button, LineEdit } from "std-widgets.slint";
 
-    // 状态色
-    out property <color> success: #16a34a;
-    out property <color> success-light: #22c55e;
-    out property <color> warning: #d97706;
-    out property <color> warning-light: #f59e0b;
-    out property <color> error: #dc2626;
-    out property <color> error-light: #ef4444;
+// Embed full CJK font for complete Chinese character support
+import "../fonts/NotoSansSC-Full.otf";
 
-    // 背景色 - 使用浅蓝灰色系
-    out property <color> bg-primary: #e8eef5;        // 主背景：浅蓝灰
-    out property <color> bg-card: #f8fafc;           // 卡片背景：近白色
-    out property <color> bg-input: #ffffff;          // 输入框：纯白
-
-    // 文字色 - 高对比度
-    out property <color> text-primary: #1a1a2e;      // 主文字：深蓝黑
-    out property <color> text-secondary: #374151;    // 标签：深灰
-    out property <color> text-muted: #6b7280;        // 提示：中灰
-
-    // 边框
-    out property <color> border: #d1d5db;
-    out property <color> border-light: #e5e7eb;
-
-    // 阴影
-    out property <color> shadow: #0000001a;
-    out property <color> shadow-dark: #00000033;
-
-    // 间距
-    out property <length> spacing-xs: 4px;
-    out property <length> spacing-sm: 8px;
-    out property <length> spacing-md: 12px;
-    out property <length> spacing-lg: 16px;
-    out property <length> spacing-xl: 24px;
-
-    // 圆角
-    out property <length> radius-sm: 6px;
-    out property <length> radius-md: 8px;
-    out property <length> radius-lg: 12px;
-    out property <length> radius-xl: 16px;
+// ===== App Theme State =====
+export global AppTheme {
+    in-out property <bool> dark-mode: false;
 }
 
-// ===== 美化卡片组件 =====
-component Card inherits Rectangle {
-    in property <string> title: "";
-
-    background: Theme.bg-card;
-    border-radius: Theme.radius-lg;
-    drop-shadow-blur: 12px;
-    drop-shadow-color: Theme.shadow;
-    drop-shadow-offset-y: 4px;
-
-    VerticalLayout {
-        padding: Theme.spacing-lg;
-        spacing: Theme.spacing-md;
-
-        if title != "": HorizontalLayout {
-            Text {
-                text: title;
-                font-size: 14px;
-                font-weight: 600;
-                color: Theme.text-primary;
-            }
-        }
-
-        @children
-    }
+// ===== Send Status Enum =====
+export enum SendStatus {
+    Idle,
+    Preparing,
+    Sending,
+    Stopped,
+    Completed
 }
 
-// ===== 美化按钮组件 =====
-component PrimaryButton inherits Rectangle {
-    in property <string> text: "";
-    in property <bool> enabled: true;
-    in property <bool> active: false;
-    callback clicked();
-
-    property <bool> hovered: touch.has-hover;
-    property <bool> pressed: touch.pressed;
-
-    height: 36px;
-    min-width: 80px;
-    border-radius: Theme.radius-md;
-    background: !enabled ? Theme.text-muted :
-                active ? @linear-gradient(180deg, Theme.primary 0%, Theme.primary-dark 100%) :
-                pressed ? Theme.primary-dark :
-                hovered ? Theme.primary-light : Theme.primary;
-
-    animate background { duration: 150ms; easing: ease-out; }
-
-    HorizontalLayout {
-        padding-left: Theme.spacing-lg;
-        padding-right: Theme.spacing-lg;
-
-        Text {
-            text: root.text;
-            font-size: 13px;
-            font-weight: 600;
-            color: white;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-        }
-    }
-
-    touch := TouchArea {
-        enabled: root.enabled;
-        mouse-cursor: root.enabled ? pointer : default;
-        clicked => { root.clicked(); }
-    }
+// ===== Send Mode Enum =====
+export enum SendMode {
+    EmlBatch,
+    SingleAttachment,
+    DirAttachment
 }
 
-// ===== 次要按钮 =====
-component SecondaryButton inherits Rectangle {
-    in property <string> text: "";
-    in property <bool> enabled: true;
-    in property <bool> active: false;
-    callback clicked();
-
-    property <bool> hovered: touch.has-hover;
-    property <bool> pressed: touch.pressed;
-
-    height: 36px;
-    min-width: 70px;
-    border-radius: Theme.radius-md;
-    border-width: 1px;
-    border-color: active ? Theme.primary : Theme.border;
-    background: !enabled ? Theme.bg-input :
-                active ? @linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%) :
-                pressed ? Theme.bg-input :
-                hovered ? Theme.border-light : Theme.bg-card;
-
-    animate background, border-color { duration: 150ms; easing: ease-out; }
-
-    HorizontalLayout {
-        padding-left: Theme.spacing-md;
-        padding-right: Theme.spacing-md;
-
-        Text {
-            text: root.text;
-            font-size: 13px;
-            font-weight: 500;
-            color: active ? Theme.primary : (root.enabled ? Theme.text-primary : Theme.text-muted);
-            horizontal-alignment: center;
-            vertical-alignment: center;
-        }
-    }
-
-    touch := TouchArea {
-        enabled: root.enabled;
-        mouse-cursor: root.enabled ? pointer : default;
-        clicked => { root.clicked(); }
-    }
+// ===== Log Entry Struct =====
+export struct LogEntry {
+    timestamp: string,
+    level: string,
+    message: string,
 }
 
-// ===== 统计卡片 =====
+// ===== Stat Card Component =====
 component StatCard inherits Rectangle {
     in property <string> label: "";
     in property <string> value: "0";
-    in property <color> accent-color: Theme.primary;
+    in property <color> accent-color: MaterialPalette.primary;
 
-    background: Theme.bg-card;
-    border-radius: Theme.radius-lg;
+    background: MaterialPalette.surface_container_low;
+    border-radius: 12px;
     border-width: 1px;
-    border-color: Theme.border-light;
+    border-color: MaterialPalette.outline_variant;
 
     VerticalLayout {
-        padding: Theme.spacing-md;
-        spacing: Theme.spacing-xs;
+        padding: 12px;
+        spacing: 4px;
+        alignment: center;
 
         Text {
             text: label;
             font-size: 12px;
-            color: Theme.text-secondary;
+            color: MaterialPalette.on_surface_variant;
             horizontal-alignment: center;
         }
 
@@ -193,35 +89,35 @@ component StatCard inherits Rectangle {
     }
 }
 
-// ===== 日志条目组件 =====
+// ===== Log Item Component =====
 component LogItem inherits Rectangle {
     in property <string> timestamp: "";
     in property <string> level: "INFO";
     in property <string> message: "";
 
-    property <color> level-color: level == "ERROR" ? Theme.error :
-                                   (level == "WARN" ? Theme.warning : Theme.primary);
-    property <color> bg-color: level == "ERROR" ? #fef2f2 :
-                                (level == "WARN" ? #fffbeb : #eff6ff);
+    property <color> level-color: level == "ERROR" ? MaterialPalette.error :
+                                   (level == "WARN" ? #d97706 : MaterialPalette.primary);
+    property <color> bg-color: level == "ERROR" ? MaterialPalette.error_container :
+                                (level == "WARN" ? #fef3c7 : MaterialPalette.surface_container);
 
     background: bg-color;
-    border-radius: Theme.radius-sm;
-    min-height: 32px;
+    border-radius: 6px;
+    height: 36px;
 
     HorizontalLayout {
-        padding: Theme.spacing-sm;
-        spacing: Theme.spacing-sm;
+        padding-left: 10px;
+        padding-right: 10px;
+        spacing: 8px;
+        alignment: start;
 
-        // 时间戳
         Text {
             text: timestamp;
             font-size: 11px;
-            color: Theme.text-secondary;
+            color: MaterialPalette.on_surface_variant;
             vertical-alignment: center;
-            min-width: 60px;
+            width: 60px;
         }
 
-        // 级别标签
         Rectangle {
             width: 48px;
             height: 20px;
@@ -238,11 +134,10 @@ component LogItem inherits Rectangle {
             }
         }
 
-        // 消息内容
         Text {
             text: message;
             font-size: 12px;
-            color: Theme.text-primary;
+            color: MaterialPalette.on_surface;
             overflow: elide;
             horizontal-stretch: 1;
             vertical-alignment: center;
@@ -250,88 +145,108 @@ component LogItem inherits Rectangle {
     }
 }
 
-// 发送状态枚举
-export enum SendStatus {
-    Idle,
-    Preparing,
-    Sending,
-    Stopped,
-    Completed
-}
+// ===== Section Header Component =====
+component SectionHeader inherits Rectangle {
+    in property <string> title: "";
 
-// 发送模式枚举
-export enum SendMode {
-    EmlBatch,
-    SingleAttachment,
-    DirAttachment
-}
+    height: 32px;
 
-// 日志条目
-export struct LogEntry {
-    timestamp: string,
-    level: string,
-    message: string,
-}
+    HorizontalLayout {
+        padding-left: 4px;
+        alignment: start;
 
-// 主应用窗口
-export component AppWindow inherits Window {
-    // 强制使用浅色主题，确保标准组件颜色正确
-    init => {
-        Palette.color-scheme = ColorScheme.light;
+        Text {
+            text: title;
+            font-size: 14px;
+            font-weight: 600;
+            color: MaterialPalette.primary;
+            vertical-alignment: center;
+        }
     }
+}
+
+// ===== Switch Row Component =====
+component SwitchRow inherits HorizontalLayout {
+    in property <string> label: "";
+    in-out property <bool> checked: false;
+
+    spacing: 8px;
+    alignment: start;
+
+    Switch {
+        width: 52px;
+        height: 32px;
+        checked <=> root.checked;
+    }
+
+    Text {
+        text: label;
+        font-size: 13px;
+        color: MaterialPalette.on_surface;
+        vertical-alignment: center;
+    }
+}
+
+// ===== Main Application Window =====
+export component AppWindow inherits Window {
+    init => {
+        Palette.color-scheme = AppTheme.dark-mode ? ColorScheme.dark : ColorScheme.light;
+    }
+
+    callback toggle-theme();
 
     title: "RSendMail";
     min-width: 900px;
     min-height: 600px;
     preferred-width: 1200px;
     preferred-height: 800px;
-    background: Theme.bg-primary;
+    background: MaterialPalette.surface;
     default-font-family: "Noto Sans CJK SC";
 
-    // ===== i18n 翻译属性 =====
+    // ===== i18n Translation Properties =====
     in-out property <string> tr-smtp-server: "SMTP Server";
-    in-out property <string> tr-server-address: "Server Address";
+    in-out property <string> tr-server-address: "Server";
     in-out property <string> tr-port: "Port";
-    in-out property <string> tr-use-tls: "Use TLS";
-    in-out property <string> tr-accept-invalid-certs: "Accept Invalid Certs";
-    in-out property <string> tr-auth-required: "Authentication Required";
+    in-out property <string> tr-use-tls: "TLS";
+    in-out property <string> tr-accept-invalid-certs: "Skip Cert";
+    in-out property <string> tr-auth-required: "Auth";
     in-out property <string> tr-username: "Username";
     in-out property <string> tr-password: "Password";
-    in-out property <string> tr-sender: "Sender";
-    in-out property <string> tr-recipient: "Recipient";
+    in-out property <string> tr-sender: "From";
+    in-out property <string> tr-recipient: "To";
     in-out property <string> tr-recipient-hint: "(comma separated)";
 
     in-out property <string> tr-send-mode: "Send Mode";
     in-out property <string> tr-eml-batch: "EML Batch";
-    in-out property <string> tr-single-attachment: "Single Attachment";
-    in-out property <string> tr-dir-attachment: "Dir Attachment";
-    in-out property <string> tr-eml-directory: "EML Directory";
-    in-out property <string> tr-attachment-file: "Attachment";
-    in-out property <string> tr-attachment-directory: "Attachment Dir";
-    in-out property <string> tr-extension: "Extension";
-    in-out property <string> tr-browse: "Browse";
+    in-out property <string> tr-single-attachment: "Attachment";
+    in-out property <string> tr-dir-attachment: "Dir Attach";
+    in-out property <string> tr-eml-directory: "EML Dir";
+    in-out property <string> tr-attachment-file: "File";
+    in-out property <string> tr-attachment-directory: "Dir";
+    in-out property <string> tr-extension: "Ext";
+    in-out property <string> tr-browse: "...";
     in-out property <string> tr-email-subject: "Subject";
     in-out property <string> tr-email-body: "Body";
     in-out property <string> tr-filename-hint: "Use {filename} for filename";
 
-    in-out property <string> tr-advanced-options: "Advanced Options";
+    in-out property <string> tr-advanced-options: "Advanced";
     in-out property <string> tr-performance: "Performance";
-    in-out property <string> tr-processes: "Processes";
-    in-out property <string> tr-batch-size: "Batch Size";
-    in-out property <string> tr-send-interval: "Interval(ms)";
-    in-out property <string> tr-timeout: "Timeout(s)";
-    in-out property <string> tr-loop-settings: "Loop Settings";
-    in-out property <string> tr-infinite-loop: "Infinite Loop";
+    in-out property <string> tr-processes: "Threads";
+    in-out property <string> tr-batch-size: "Batch";
+    in-out property <string> tr-send-interval: "Interval";
+    in-out property <string> tr-timeout: "Timeout";
+    in-out property <string> tr-loop-settings: "Loop";
+    in-out property <string> tr-infinite-loop: "Loop";
     in-out property <string> tr-repeat-count: "Repeat";
-    in-out property <string> tr-loop-interval: "Loop Interval(s)";
-    in-out property <string> tr-retry-interval: "Retry Interval(s)";
-    in-out property <string> tr-email-processing: "Email Processing";
-    in-out property <string> tr-keep-headers: "Keep Headers";
-    in-out property <string> tr-modify-headers: "Modify Headers";
-    in-out property <string> tr-anonymize-emails: "Anonymize";
+    in-out property <string> tr-loop-interval: "Interval";
+    in-out property <string> tr-retry-interval: "Retry";
+    in-out property <string> tr-email-processing: "Processing";
+    in-out property <string> tr-keep-headers: "Keep Hdr";
+    in-out property <string> tr-modify-headers: "Mod Hdr";
+    in-out property <string> tr-anonymize-emails: "Anon";
     in-out property <string> tr-domain: "Domain";
     in-out property <string> tr-logging: "Logging";
-    in-out property <string> tr-log-level: "Log Level";
+    in-out property <string> tr-log-level: "Level";
     in-out property <string> tr-log-file: "Log File";
     in-out property <string> tr-failed-emails-dir: "Failed Dir";
     in-out property <string> tr-optional: "(optional)";
@@ -341,9 +256,9 @@ export component AppWindow inherits Window {
     in-out property <string> tr-success: "Success";
     in-out property <string> tr-failed: "Failed";
     in-out property <string> tr-current-round: "Round";
-    in-out property <string> tr-elapsed-time: "Elapsed";
+    in-out property <string> tr-elapsed-time: "Time";
 
-    in-out property <string> tr-send-log: "Send Log";
+    in-out property <string> tr-send-log: "Log";
     in-out property <string> tr-clear: "Clear";
     in-out property <string> tr-export-log: "Export";
 
@@ -354,13 +269,15 @@ export component AppWindow inherits Window {
     in-out property <string> tr-stop-send: "Stop";
 
     in-out property <string> tr-language: "Language";
+    in-out property <string> tr-theme: "Theme";
+    in-out property <string> tr-ok: "OK";
 
-    // ===== 语言设置 =====
+    // ===== Language Settings =====
     in-out property <[string]> available-languages: [];
     in-out property <int> current-language-index: 0;
     callback language-changed(int);
 
-    // ===== SMTP 配置 =====
+    // ===== SMTP Configuration =====
     in-out property <string> smtp-server: "";
     in-out property <string> smtp-port-str: "25";
     in-out property <bool> use-tls: false;
@@ -371,24 +288,24 @@ export component AppWindow inherits Window {
     in-out property <string> from-address: "";
     in-out property <string> to-address: "";
 
-    // ===== 发送模式 =====
+    // ===== Send Mode =====
     in-out property <SendMode> send-mode: SendMode.EmlBatch;
 
-    // ===== EML 模式配置 =====
+    // ===== EML Mode Configuration =====
     in-out property <string> eml-dir: "";
     in-out property <string> eml-extension: "eml";
     in-out property <int> eml-file-count: 0;
 
-    // ===== 附件模式配置 =====
+    // ===== Attachment Mode Configuration =====
     in-out property <string> attachment-path: "";
     in-out property <string> attachment-dir: "";
     in-out property <int> attachment-file-count: 0;
 
-    // ===== 邮件模板 =====
+    // ===== Email Templates =====
     in-out property <string> subject-template: "Attachment: {filename}";
     in-out property <string> text-template: "Please check: {filename}";
 
-    // ===== 高级选项 =====
+    // ===== Advanced Options =====
     in-out property <string> processes: "auto";
     in-out property <string> batch-size-str: "1";
     in-out property <string> smtp-timeout-str: "30";
@@ -405,7 +322,7 @@ export component AppWindow inherits Window {
     in-out property <string> log-file: "";
     in-out property <string> failed-emails-dir: "";
 
-    // ===== 发送状态 =====
+    // ===== Send Status =====
     in-out property <SendStatus> status: SendStatus.Idle;
     in-out property <int> total-count: 0;
     in-out property <int> sent-count: 0;
@@ -417,17 +334,17 @@ export component AppWindow inherits Window {
     in-out property <int> total-rounds: 1;
     in-out property <string> status-text: "Ready";
 
-    // ===== 日志 =====
+    // ===== Logs =====
     in-out property <[LogEntry]> logs: [];
 
-    // ===== 错误/消息对话框 =====
+    // ===== Error/Message Dialog =====
     in-out property <bool> show-message-dialog: false;
     in-out property <string> message-dialog-title: "Message";
     in-out property <string> message-dialog-content: "";
     in-out property <bool> message-dialog-is-error: false;
     callback close-message-dialog();
 
-    // ===== 回调 =====
+    // ===== Callbacks =====
     callback test-connection();
     callback start-send();
     callback stop-send();
@@ -441,111 +358,135 @@ export component AppWindow inherits Window {
     callback save-config();
     callback load-config();
 
-    // ===== 主布局 =====
+    // ===== Main Layout =====
     VerticalLayout {
-        padding: Theme.spacing-lg;
-        spacing: Theme.spacing-md;
+        padding: 12px;
+        spacing: 12px;
 
-        // ===== 顶部栏 =====
+        // ===== Top Bar =====
         Rectangle {
             height: 48px;
-            background: Theme.bg-card;
-            border-radius: Theme.radius-lg;
-            drop-shadow-blur: 8px;
-            drop-shadow-color: Theme.shadow;
-            drop-shadow-offset-y: 2px;
+            background: MaterialPalette.surface_container;
+            border-radius: 8px;
+            clip: true;
 
             HorizontalLayout {
-                padding-left: Theme.spacing-lg;
-                padding-right: Theme.spacing-lg;
-                spacing: Theme.spacing-md;
+                padding-left: 16px;
+                padding-right: 16px;
+                padding-top: 8px;
+                padding-bottom: 8px;
+                spacing: 12px;
+                alignment: center;
 
-                // Logo 和标题
-                HorizontalLayout {
-                    spacing: Theme.spacing-sm;
-
-                    Rectangle {
-                        width: 32px;
-                        height: 32px;
-                        border-radius: 8px;
-                        background: @linear-gradient(135deg, Theme.primary 0%, Theme.primary-dark 100%);
-
-                        Text {
-                            text: "📧";
-                            font-size: 16px;
-                            horizontal-alignment: center;
-                            vertical-alignment: center;
-                        }
-                    }
+                // Logo
+                Rectangle {
+                    width: 28px;
+                    height: 28px;
+                    border-radius: 6px;
+                    background: MaterialPalette.primary;
 
                     Text {
-                        text: "RSendMail";
-                        font-size: 18px;
-                        font-weight: 700;
-                        color: Theme.text-primary;
-                        vertical-alignment: center;
-                    }
-
-                    Text {
-                        text: "v0.2.0";
-                        font-size: 12px;
-                        color: Theme.text-muted;
+                        text: "✉";
+                        font-size: 14px;
+                        color: MaterialPalette.on_primary;
+                        horizontal-alignment: center;
                         vertical-alignment: center;
                     }
                 }
 
+                Text {
+                    text: "RSendMail";
+                    font-size: 16px;
+                    font-weight: 700;
+                    color: MaterialPalette.on_surface;
+                    vertical-alignment: center;
+                }
+
+                Text {
+                    text: "v0.2.0";
+                    font-size: 10px;
+                    color: MaterialPalette.on_surface_variant;
+                    vertical-alignment: center;
+                }
+
                 Rectangle { horizontal-stretch: 1; }
 
-                // 语言选择
+                // Theme Toggle
                 HorizontalLayout {
-                    spacing: Theme.spacing-sm;
+                    spacing: 6px;
+                    alignment: center;
+
+                    Text {
+                        text: AppTheme.dark-mode ? "🌙" : "☀";
+                        font-size: 12px;
+                        vertical-alignment: center;
+                    }
+
+                    Switch {
+                        width: 44px;
+                        height: 24px;
+                        checked: AppTheme.dark-mode;
+                        checked-state-changed(checked) => {
+                            AppTheme.dark-mode = checked;
+                            Palette.color-scheme = checked ? ColorScheme.dark : ColorScheme.light;
+                        }
+                    }
+                }
+
+                // Language
+                HorizontalLayout {
+                    spacing: 6px;
+                    alignment: center;
 
                     Text {
                         text: "🌐";
-                        font-size: 14px;
+                        font-size: 12px;
                         vertical-alignment: center;
                     }
 
                     ComboBox {
                         model: available-languages;
                         current-index <=> current-language-index;
-                        width: 110px;
+                        width: 90px;
                         selected(idx) => { language-changed(current-language-index); }
                     }
                 }
             }
         }
 
-        // ===== 主内容区 =====
+        // ===== Main Content =====
         HorizontalLayout {
-            spacing: Theme.spacing-md;
+            spacing: 12px;
             vertical-stretch: 1;
 
-            // ===== 左侧配置区 =====
+            // ===== Left Panel - Configuration =====
             ScrollView {
                 width: 48%;
 
                 VerticalLayout {
-                    spacing: Theme.spacing-md;
-                    padding-right: Theme.spacing-sm;
+                    spacing: 12px;
+                    padding-right: 8px;
 
-                    // SMTP 配置卡片
-                    Card {
-                        title: tr-smtp-server;
-
+                    // SMTP Server Section
+                    OutlinedCard {
                         VerticalLayout {
-                            spacing: Theme.spacing-sm;
+                            padding: 16px;
+                            spacing: 10px;
 
-                            // 服务器地址
+                            SectionHeader { title: tr-smtp-server; }
+
+                            // Server Address
                             HorizontalLayout {
-                                spacing: Theme.spacing-sm;
+                                spacing: 8px;
+
                                 Text {
                                     text: tr-server-address;
-                                    min-width: 90px;
+                                    width: 60px;
                                     font-size: 13px;
-                                    color: Theme.text-secondary;
+                                    color: MaterialPalette.on_surface_variant;
                                     vertical-alignment: center;
                                 }
+
                                 LineEdit {
                                     text <=> smtp-server;
                                     placeholder-text: "smtp.example.com";
@@ -553,147 +494,189 @@ export component AppWindow inherits Window {
                                 }
                             }
 
-                            // 端口
+                            // Port
                             HorizontalLayout {
-                                spacing: Theme.spacing-sm;
+                                spacing: 8px;
+                                alignment: start;
+
                                 Text {
                                     text: tr-port;
-                                    min-width: 90px;
+                                    width: 60px;
                                     font-size: 13px;
-                                    color: Theme.text-secondary;
+                                    color: MaterialPalette.on_surface_variant;
                                     vertical-alignment: center;
                                 }
-                                LineEdit { text <=> smtp-port-str; width: 60px; }
-                                SecondaryButton { text: "25"; clicked => { smtp-port-str = "25"; } }
-                                SecondaryButton { text: "465"; clicked => { smtp-port-str = "465"; use-tls = true; } }
-                                SecondaryButton { text: "587"; clicked => { smtp-port-str = "587"; } }
-                            }
 
-                            // TLS 选项
-                            HorizontalLayout {
-                                spacing: Theme.spacing-lg;
-                                CheckBox { text: tr-use-tls; checked <=> use-tls; }
-                                CheckBox { text: tr-accept-invalid-certs; checked <=> accept-invalid-certs; }
-                            }
-
-                            // 认证
-                            CheckBox { text: tr-auth-required; checked <=> auth-mode; }
-
-                            if auth-mode: VerticalLayout {
-                                spacing: Theme.spacing-sm;
-                                HorizontalLayout {
-                                    spacing: Theme.spacing-sm;
-                                    Text {
-                                        text: tr-username;
-                                        min-width: 90px;
-                                        font-size: 13px;
-                                        color: Theme.text-secondary;
-                                        vertical-alignment: center;
-                                    }
-                                    LineEdit { text <=> username; horizontal-stretch: 1; }
+                                LineEdit {
+                                    text <=> smtp-port-str;
+                                    width: 60px;
                                 }
-                                HorizontalLayout {
-                                    spacing: Theme.spacing-sm;
-                                    Text {
-                                        text: tr-password;
-                                        min-width: 90px;
-                                        font-size: 13px;
-                                        color: Theme.text-secondary;
-                                        vertical-alignment: center;
-                                    }
-                                    LineEdit { text <=> password; input-type: InputType.password; horizontal-stretch: 1; }
+
+                                Button { text: "25"; clicked => { smtp-port-str = "25"; } }
+                                Button { text: "465"; clicked => { smtp-port-str = "465"; use-tls = true; } }
+                                Button { text: "587"; clicked => { smtp-port-str = "587"; } }
+                            }
+
+                            // TLS Options
+                            HorizontalLayout {
+                                spacing: 16px;
+                                alignment: start;
+
+                                SwitchRow { label: tr-use-tls; checked <=> use-tls; }
+                                SwitchRow { label: tr-accept-invalid-certs; checked <=> accept-invalid-certs; }
+                            }
+
+                            // Auth
+                            SwitchRow { label: tr-auth-required; checked <=> auth-mode; }
+
+                            if auth-mode: HorizontalLayout {
+                                spacing: 8px;
+
+                                Text {
+                                    text: tr-username;
+                                    width: 60px;
+                                    font-size: 13px;
+                                    color: MaterialPalette.on_surface_variant;
+                                    vertical-alignment: center;
+                                }
+
+                                LineEdit {
+                                    text <=> username;
+                                    horizontal-stretch: 1;
+                                }
+
+                                Text {
+                                    text: tr-password;
+                                    width: 60px;
+                                    font-size: 13px;
+                                    color: MaterialPalette.on_surface_variant;
+                                    vertical-alignment: center;
+                                }
+
+                                LineEdit {
+                                    text <=> password;
+                                    horizontal-stretch: 1;
                                 }
                             }
 
-                            // 发件人/收件人
+                            // Sender
                             HorizontalLayout {
-                                spacing: Theme.spacing-sm;
+                                spacing: 8px;
+
                                 Text {
                                     text: tr-sender;
-                                    min-width: 90px;
+                                    width: 60px;
                                     font-size: 13px;
-                                    color: Theme.text-secondary;
+                                    color: MaterialPalette.on_surface_variant;
                                     vertical-alignment: center;
                                 }
-                                LineEdit { text <=> from-address; placeholder-text: "sender@example.com"; horizontal-stretch: 1; }
+
+                                LineEdit {
+                                    text <=> from-address;
+                                    placeholder-text: "sender@example.com";
+                                    horizontal-stretch: 1;
+                                }
                             }
 
+                            // Recipient
                             HorizontalLayout {
-                                spacing: Theme.spacing-sm;
+                                spacing: 8px;
+
                                 Text {
                                     text: tr-recipient;
-                                    min-width: 90px;
+                                    width: 60px;
                                     font-size: 13px;
-                                    color: Theme.text-secondary;
+                                    color: MaterialPalette.on_surface_variant;
                                     vertical-alignment: center;
                                 }
-                                LineEdit { text <=> to-address; placeholder-text: tr-recipient-hint; horizontal-stretch: 1; }
+
+                                LineEdit {
+                                    text <=> to-address;
+                                    placeholder-text: tr-recipient-hint;
+                                    horizontal-stretch: 1;
+                                }
                             }
                         }
                     }
 
-                    // 发送模式卡片
-                    Card {
-                        title: tr-send-mode;
-
+                    // Send Mode Section
+                    OutlinedCard {
                         VerticalLayout {
-                            spacing: Theme.spacing-sm;
+                            padding: 16px;
+                            spacing: 10px;
 
-                            // 模式选择按钮
-                            HorizontalLayout {
-                                spacing: Theme.spacing-sm;
+                            SectionHeader { title: tr-send-mode; }
 
-                                SecondaryButton {
-                                    text: "📧 " + tr-eml-batch;
-                                    active: send-mode == SendMode.EmlBatch;
-                                    clicked => { send-mode = SendMode.EmlBatch; }
-                                }
-                                SecondaryButton {
-                                    text: "📎 " + tr-single-attachment;
-                                    active: send-mode == SendMode.SingleAttachment;
-                                    clicked => { send-mode = SendMode.SingleAttachment; }
-                                }
-                                SecondaryButton {
-                                    text: "📁 " + tr-dir-attachment;
-                                    active: send-mode == SendMode.DirAttachment;
-                                    clicked => { send-mode = SendMode.DirAttachment; }
+                            // Mode Selection
+                            SegmentedButton {
+                                items: [
+                                    { text: tr-eml-batch },
+                                    { text: tr-single-attachment },
+                                    { text: tr-dir-attachment },
+                                ];
+                                current-index: send-mode == SendMode.EmlBatch ? 0 :
+                                              (send-mode == SendMode.SingleAttachment ? 1 : 2);
+                                index-changed(idx) => {
+                                    if idx == 0 {
+                                        send-mode = SendMode.EmlBatch;
+                                    } else if idx == 1 {
+                                        send-mode = SendMode.SingleAttachment;
+                                    } else {
+                                        send-mode = SendMode.DirAttachment;
+                                    }
                                 }
                             }
 
-                            // EML 模式
+                            // EML Mode Options
                             if send-mode == SendMode.EmlBatch: VerticalLayout {
-                                spacing: Theme.spacing-sm;
+                                spacing: 8px;
+
                                 HorizontalLayout {
-                                    spacing: Theme.spacing-sm;
+                                    spacing: 8px;
+
                                     Text {
                                         text: tr-eml-directory;
-                                        min-width: 90px;
+                                        width: 60px;
                                         font-size: 13px;
-                                        color: Theme.text-secondary;
+                                        color: MaterialPalette.on_surface_variant;
                                         vertical-alignment: center;
                                     }
-                                    LineEdit { text <=> eml-dir; horizontal-stretch: 1; }
-                                    SecondaryButton { text: tr-browse; clicked => { browse-eml-dir(); } }
+
+                                    LineEdit {
+                                        text <=> eml-dir;
+                                        horizontal-stretch: 1;
+                                    }
+
+                                    Button { text: tr-browse; clicked => { browse-eml-dir(); } }
                                 }
+
                                 HorizontalLayout {
-                                    spacing: Theme.spacing-sm;
+                                    spacing: 8px;
+                                    alignment: start;
+
                                     Text {
                                         text: tr-extension;
-                                        min-width: 90px;
+                                        width: 60px;
                                         font-size: 13px;
-                                        color: Theme.text-secondary;
+                                        color: MaterialPalette.on_surface_variant;
                                         vertical-alignment: center;
                                     }
-                                    LineEdit { text <=> eml-extension; width: 60px; }
+
+                                    LineEdit {
+                                        text <=> eml-extension;
+                                        width: 60px;
+                                    }
+
                                     if eml-file-count > 0: Rectangle {
-                                        background: Theme.success-light;
-                                        border-radius: 4px;
-                                        height: 24px;
+                                        background: MaterialPalette.tertiary_container;
+                                        border-radius: 10px;
+                                        height: 20px;
                                         width: 80px;
+
                                         Text {
                                             text: "Found: " + eml-file-count;
-                                            font-size: 12px;
-                                            color: white;
+                                            font-size: 11px;
+                                            color: MaterialPalette.on_tertiary_container;
                                             horizontal-alignment: center;
                                             vertical-alignment: center;
                                         }
@@ -701,178 +684,239 @@ export component AppWindow inherits Window {
                                 }
                             }
 
-                            // 单附件模式
+                            // Single Attachment Mode
                             if send-mode == SendMode.SingleAttachment: VerticalLayout {
-                                spacing: Theme.spacing-sm;
+                                spacing: 8px;
+
                                 HorizontalLayout {
-                                    spacing: Theme.spacing-sm;
+                                    spacing: 8px;
+
                                     Text {
                                         text: tr-attachment-file;
-                                        min-width: 90px;
+                                        width: 60px;
                                         font-size: 13px;
-                                        color: Theme.text-secondary;
+                                        color: MaterialPalette.on_surface_variant;
                                         vertical-alignment: center;
                                     }
-                                    LineEdit { text <=> attachment-path; horizontal-stretch: 1; }
-                                    SecondaryButton { text: tr-browse; clicked => { browse-attachment(); } }
+
+                                    LineEdit {
+                                        text <=> attachment-path;
+                                        horizontal-stretch: 1;
+                                    }
+
+                                    Button { text: tr-browse; clicked => { browse-attachment(); } }
                                 }
+
                                 HorizontalLayout {
-                                    spacing: Theme.spacing-sm;
+                                    spacing: 8px;
+
                                     Text {
                                         text: tr-email-subject;
-                                        min-width: 90px;
+                                        width: 60px;
                                         font-size: 13px;
-                                        color: Theme.text-secondary;
+                                        color: MaterialPalette.on_surface_variant;
                                         vertical-alignment: center;
                                     }
-                                    LineEdit { text <=> subject-template; horizontal-stretch: 1; }
+
+                                    LineEdit {
+                                        text <=> subject-template;
+                                        horizontal-stretch: 1;
+                                    }
                                 }
+
                                 HorizontalLayout {
-                                    spacing: Theme.spacing-sm;
+                                    spacing: 8px;
+
                                     Text {
                                         text: tr-email-body;
-                                        min-width: 90px;
+                                        width: 60px;
                                         font-size: 13px;
-                                        color: Theme.text-secondary;
+                                        color: MaterialPalette.on_surface_variant;
                                         vertical-alignment: center;
                                     }
-                                    LineEdit { text <=> text-template; horizontal-stretch: 1; }
+
+                                    LineEdit {
+                                        text <=> text-template;
+                                        horizontal-stretch: 1;
+                                    }
                                 }
                             }
 
-                            // 目录附件模式
+                            // Directory Attachment Mode
                             if send-mode == SendMode.DirAttachment: VerticalLayout {
-                                spacing: Theme.spacing-sm;
+                                spacing: 8px;
+
                                 HorizontalLayout {
-                                    spacing: Theme.spacing-sm;
+                                    spacing: 8px;
+
                                     Text {
                                         text: tr-attachment-directory;
-                                        min-width: 90px;
+                                        width: 60px;
                                         font-size: 13px;
-                                        color: Theme.text-secondary;
+                                        color: MaterialPalette.on_surface_variant;
                                         vertical-alignment: center;
                                     }
-                                    LineEdit { text <=> attachment-dir; horizontal-stretch: 1; }
-                                    SecondaryButton { text: tr-browse; clicked => { browse-attachment-dir(); } }
+
+                                    LineEdit {
+                                        text <=> attachment-dir;
+                                        horizontal-stretch: 1;
+                                    }
+
+                                    Button { text: tr-browse; clicked => { browse-attachment-dir(); } }
                                 }
-                                if attachment-file-count > 0: Rectangle {
-                                    background: Theme.success-light;
-                                    border-radius: 4px;
-                                    height: 24px;
-                                    width: 80px;
-                                    Text {
-                                        text: "Found: " + attachment-file-count;
-                                        font-size: 12px;
-                                        color: white;
-                                        horizontal-alignment: center;
-                                        vertical-alignment: center;
+
+                                if attachment-file-count > 0: HorizontalLayout {
+                                    alignment: start;
+
+                                    Rectangle {
+                                        background: MaterialPalette.tertiary_container;
+                                        border-radius: 10px;
+                                        height: 20px;
+                                        width: 80px;
+
+                                        Text {
+                                            text: "Found: " + attachment-file-count;
+                                            font-size: 11px;
+                                            color: MaterialPalette.on_tertiary_container;
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                        }
                                     }
                                 }
+
                                 HorizontalLayout {
-                                    spacing: Theme.spacing-sm;
+                                    spacing: 8px;
+
                                     Text {
                                         text: tr-email-subject;
-                                        min-width: 90px;
+                                        width: 60px;
                                         font-size: 13px;
-                                        color: Theme.text-secondary;
+                                        color: MaterialPalette.on_surface_variant;
                                         vertical-alignment: center;
                                     }
-                                    LineEdit { text <=> subject-template; horizontal-stretch: 1; }
+
+                                    LineEdit {
+                                        text <=> subject-template;
+                                        horizontal-stretch: 1;
+                                    }
                                 }
+
                                 HorizontalLayout {
-                                    spacing: Theme.spacing-sm;
+                                    spacing: 8px;
+
                                     Text {
                                         text: tr-email-body;
-                                        min-width: 90px;
+                                        width: 60px;
                                         font-size: 13px;
-                                        color: Theme.text-secondary;
+                                        color: MaterialPalette.on_surface_variant;
                                         vertical-alignment: center;
                                     }
-                                    LineEdit { text <=> text-template; horizontal-stretch: 1; }
+
+                                    LineEdit {
+                                        text <=> text-template;
+                                        horizontal-stretch: 1;
+                                    }
                                 }
                             }
                         }
                     }
 
-                    // 高级选项卡片
-                    Card {
-                        title: tr-advanced-options;
-
+                    // Advanced Options Section
+                    OutlinedCard {
                         VerticalLayout {
-                            spacing: Theme.spacing-sm;
+                            padding: 16px;
+                            spacing: 10px;
 
-                            // 性能设置
+                            SectionHeader { title: tr-advanced-options; }
+
+                            // Performance row
                             HorizontalLayout {
-                                spacing: Theme.spacing-lg;
+                                spacing: 12px;
+                                alignment: start;
+
                                 HorizontalLayout {
-                                    spacing: Theme.spacing-xs;
+                                    spacing: 4px;
                                     Text {
                                         text: tr-processes;
-                                        font-size: 13px;
-                                        color: Theme.text-secondary;
+                                        font-size: 12px;
+                                        color: MaterialPalette.on_surface_variant;
                                         vertical-alignment: center;
                                     }
                                     LineEdit { text <=> processes; width: 50px; }
                                 }
+
                                 HorizontalLayout {
-                                    spacing: Theme.spacing-xs;
+                                    spacing: 4px;
                                     Text {
                                         text: tr-batch-size;
-                                        font-size: 13px;
-                                        color: Theme.text-secondary;
+                                        font-size: 12px;
+                                        color: MaterialPalette.on_surface_variant;
                                         vertical-alignment: center;
                                     }
                                     LineEdit { text <=> batch-size-str; width: 50px; }
                                 }
+
                                 HorizontalLayout {
-                                    spacing: Theme.spacing-xs;
+                                    spacing: 4px;
                                     Text {
                                         text: tr-timeout;
-                                        font-size: 13px;
-                                        color: Theme.text-secondary;
+                                        font-size: 12px;
+                                        color: MaterialPalette.on_surface_variant;
                                         vertical-alignment: center;
                                     }
                                     LineEdit { text <=> smtp-timeout-str; width: 50px; }
                                 }
                             }
 
-                            // 循环设置
+                            // Loop settings
                             HorizontalLayout {
-                                spacing: Theme.spacing-lg;
-                                CheckBox { text: tr-infinite-loop; checked <=> loop-mode; }
+                                spacing: 12px;
+                                alignment: start;
+
+                                SwitchRow { label: tr-infinite-loop; checked <=> loop-mode; }
+
                                 HorizontalLayout {
-                                    spacing: Theme.spacing-xs;
+                                    spacing: 4px;
                                     Text {
                                         text: tr-repeat-count;
-                                        font-size: 13px;
-                                        color: Theme.text-secondary;
+                                        font-size: 12px;
+                                        color: MaterialPalette.on_surface_variant;
                                         vertical-alignment: center;
                                     }
-                                    LineEdit { text <=> repeat-count-str; width: 50px; enabled: !loop-mode; }
+                                    LineEdit {
+                                        text <=> repeat-count-str;
+                                        width: 50px;
+                                        enabled: !loop-mode;
+                                    }
                                 }
                             }
 
-                            // EML 特有选项
+                            // EML specific options
                             if send-mode == SendMode.EmlBatch: HorizontalLayout {
-                                spacing: Theme.spacing-lg;
-                                CheckBox { text: tr-keep-headers; checked <=> keep-headers; }
-                                CheckBox { text: tr-modify-headers; checked <=> modify-headers; }
-                                CheckBox { text: tr-anonymize-emails; checked <=> anonymize-emails; }
+                                spacing: 12px;
+                                alignment: start;
+
+                                SwitchRow { label: tr-keep-headers; checked <=> keep-headers; }
+                                SwitchRow { label: tr-modify-headers; checked <=> modify-headers; }
+                                SwitchRow { label: tr-anonymize-emails; checked <=> anonymize-emails; }
                             }
 
-                            // 日志级别
+                            // Log level
                             HorizontalLayout {
-                                spacing: Theme.spacing-sm;
+                                spacing: 8px;
+                                alignment: start;
+
                                 Text {
                                     text: tr-log-level;
-                                    font-size: 13px;
-                                    color: Theme.text-secondary;
+                                    font-size: 12px;
+                                    color: MaterialPalette.on_surface_variant;
                                     vertical-alignment: center;
                                 }
+
                                 ComboBox {
                                     model: ["error", "warn", "info", "debug", "trace"];
                                     current-index: 2;
-                                    width: 90px;
+                                    width: 80px;
                                     selected(s) => { log-level = s; }
                                 }
                             }
@@ -881,101 +925,103 @@ export component AppWindow inherits Window {
                 }
             }
 
-            // ===== 右侧监控区 =====
+            // ===== Right Panel - Monitoring =====
             VerticalLayout {
                 horizontal-stretch: 1;
-                spacing: Theme.spacing-md;
+                spacing: 12px;
 
-                // 统计卡片
-                Card {
-                    title: tr-statistics;
-
+                // Statistics
+                OutlinedCard {
                     VerticalLayout {
-                        spacing: Theme.spacing-md;
+                        padding: 16px;
+                        spacing: 12px;
 
-                        // 统计数字
+                        SectionHeader { title: tr-statistics; }
+
+                        // Stats Grid
                         HorizontalLayout {
-                            spacing: Theme.spacing-sm;
+                            spacing: 8px;
 
                             StatCard {
                                 horizontal-stretch: 1;
                                 label: tr-total;
                                 value: total-count;
-                                accent-color: Theme.primary;
+                                accent-color: MaterialPalette.primary;
                             }
 
                             StatCard {
                                 horizontal-stretch: 1;
                                 label: tr-success;
                                 value: success-count;
-                                accent-color: Theme.success;
+                                accent-color: MaterialPalette.tertiary;
                             }
 
                             StatCard {
                                 horizontal-stretch: 1;
                                 label: tr-failed;
                                 value: fail-count;
-                                accent-color: Theme.error;
+                                accent-color: MaterialPalette.error;
                             }
 
                             StatCard {
                                 horizontal-stretch: 1;
                                 label: "QPS";
                                 value: round(qps * 10) / 10;
-                                accent-color: Theme.warning;
+                                accent-color: MaterialPalette.secondary;
                             }
                         }
 
-                        // 进度条
+                        // Progress
                         Rectangle {
-                            height: 8px;
-                            border-radius: 4px;
-                            background: Theme.bg-input;
+                            height: 6px;
+                            border-radius: 3px;
+                            background: MaterialPalette.surface_container_highest;
 
                             Rectangle {
                                 width: parent.width * (total-count > 0 ? (sent-count / total-count) : 0);
                                 height: parent.height;
-                                border-radius: 4px;
-                                background: @linear-gradient(90deg, Theme.primary 0%, Theme.success 100%);
+                                border-radius: 3px;
+                                background: MaterialPalette.primary;
 
                                 animate width { duration: 300ms; easing: ease-out; }
                             }
                         }
 
-                        // 轮次和时间
+                        // Round/Time info
                         HorizontalLayout {
-                            spacing: Theme.spacing-xl;
+                            spacing: 16px;
+                            alignment: start;
 
                             HorizontalLayout {
-                                spacing: Theme.spacing-xs;
+                                spacing: 4px;
                                 Text {
                                     text: tr-current-round + ":";
-                                    font-size: 13px;
-                                    color: Theme.text-secondary;
+                                    font-size: 12px;
+                                    color: MaterialPalette.on_surface_variant;
                                     vertical-alignment: center;
                                 }
                                 Text {
                                     text: current-round + "/" + total-rounds;
-                                    font-size: 13px;
+                                    font-size: 12px;
                                     font-weight: 600;
-                                    color: Theme.text-primary;
+                                    color: MaterialPalette.on_surface;
                                     vertical-alignment: center;
                                 }
                             }
 
                             HorizontalLayout {
-                                spacing: Theme.spacing-xs;
+                                spacing: 4px;
                                 Text {
                                     text: tr-elapsed-time + ":";
-                                    font-size: 13px;
-                                    color: Theme.text-secondary;
+                                    font-size: 12px;
+                                    color: MaterialPalette.on_surface_variant;
                                     vertical-alignment: center;
                                 }
                                 Text {
                                     text: elapsed-time;
-                                    font-size: 13px;
+                                    font-size: 12px;
                                     font-weight: 600;
-                                    color: Theme.text-primary;
+                                    color: MaterialPalette.on_surface;
                                     vertical-alignment: center;
                                 }
                             }
@@ -983,20 +1029,22 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                // 日志卡片
-                Card {
-                    title: tr-send-log;
+                // Logs
+                OutlinedCard {
                     vertical-stretch: 1;
 
                     VerticalLayout {
-                        spacing: Theme.spacing-sm;
+                        padding: 16px;
+                        spacing: 8px;
+
+                        SectionHeader { title: tr-send-log; }
 
                         ScrollView {
                             vertical-stretch: 1;
 
                             VerticalLayout {
-                                spacing: Theme.spacing-xs;
-                                padding: Theme.spacing-xs;
+                                spacing: 4px;
+                                alignment: start;
 
                                 for entry in logs: LogItem {
                                     timestamp: entry.timestamp;
@@ -1007,89 +1055,92 @@ export component AppWindow inherits Window {
                         }
 
                         HorizontalLayout {
-                            spacing: Theme.spacing-sm;
-                            SecondaryButton { text: tr-clear; clicked => { clear-logs(); } }
-                            SecondaryButton { text: tr-export-log; clicked => { export-logs(); } }
+                            spacing: 8px;
+                            alignment: start;
+
+                            Button { text: tr-clear; clicked => { clear-logs(); } }
+                            Button { text: tr-export-log; clicked => { export-logs(); } }
                         }
                     }
                 }
             }
         }
 
-        // ===== 底部操作栏 =====
+        // ===== Bottom Bar =====
         Rectangle {
-            height: 56px;
-            background: Theme.bg-card;
-            border-radius: Theme.radius-lg;
-            drop-shadow-blur: 8px;
-            drop-shadow-color: Theme.shadow;
-            drop-shadow-offset-y: -2px;
+            height: 52px;
+            background: MaterialPalette.surface_container;
+            border-radius: 8px;
+            clip: true;
 
             HorizontalLayout {
-                padding-left: Theme.spacing-lg;
-                padding-right: Theme.spacing-lg;
-                spacing: Theme.spacing-md;
+                padding-left: 16px;
+                padding-right: 16px;
+                padding-top: 8px;
+                padding-bottom: 8px;
+                spacing: 12px;
+                alignment: center;
 
-                // 状态指示器
+                // Status
                 HorizontalLayout {
-                    spacing: Theme.spacing-sm;
+                    spacing: 8px;
+                    alignment: center;
 
                     Rectangle {
-                        width: 10px;
-                        height: 10px;
-                        border-radius: 5px;
-                        background: status == SendStatus.Idle ? Theme.text-muted :
-                                   (status == SendStatus.Sending ? Theme.success :
-                                   (status == SendStatus.Completed ? Theme.primary : Theme.warning));
-
-                        // 发送中闪烁动画
-                        opacity: 1.0;
-                        animate opacity { duration: 500ms; }
+                        width: 8px;
+                        height: 8px;
+                        border-radius: 4px;
+                        background: status == SendStatus.Idle ? MaterialPalette.outline :
+                                   (status == SendStatus.Sending ? MaterialPalette.tertiary :
+                                   (status == SendStatus.Completed ? MaterialPalette.primary : MaterialPalette.secondary));
                     }
 
                     Text {
                         text: status-text;
-                        font-size: 13px;
+                        font-size: 12px;
                         font-weight: 500;
-                        color: Theme.text-primary;
+                        color: MaterialPalette.on_surface;
                         vertical-alignment: center;
                     }
                 }
 
-                // 成功/失败计数
+                // Success/Fail counts
                 HorizontalLayout {
-                    spacing: Theme.spacing-md;
+                    spacing: 12px;
+                    alignment: center;
 
                     HorizontalLayout {
-                        spacing: Theme.spacing-xs;
+                        spacing: 4px;
+                        alignment: center;
                         Text {
                             text: "✓";
-                            font-size: 14px;
-                            color: Theme.success;
+                            font-size: 12px;
+                            color: MaterialPalette.tertiary;
                             vertical-alignment: center;
                         }
                         Text {
                             text: success-count;
-                            font-size: 13px;
+                            font-size: 12px;
                             font-weight: 600;
-                            color: Theme.success;
+                            color: MaterialPalette.tertiary;
                             vertical-alignment: center;
                         }
                     }
 
                     HorizontalLayout {
-                        spacing: Theme.spacing-xs;
+                        spacing: 4px;
+                        alignment: center;
                         Text {
                             text: "✗";
-                            font-size: 14px;
-                            color: Theme.error;
+                            font-size: 12px;
+                            color: MaterialPalette.error;
                             vertical-alignment: center;
                         }
                         Text {
                             text: fail-count;
-                            font-size: 13px;
+                            font-size: 12px;
                             font-weight: 600;
-                            color: Theme.error;
+                            color: MaterialPalette.error;
                             vertical-alignment: center;
                         }
                     }
@@ -1097,28 +1148,31 @@ export component AppWindow inherits Window {
 
                 Rectangle { horizontal-stretch: 1; }
 
-                // 操作按钮
+                // Action buttons
                 HorizontalLayout {
-                    spacing: Theme.spacing-sm;
+                    spacing: 8px;
+                    alignment: center;
 
-                    SecondaryButton {
+                    Button {
                         text: tr-save-config;
                         enabled: status != SendStatus.Sending;
                         clicked => { save-config(); }
                     }
-                    SecondaryButton {
+
+                    Button {
                         text: tr-load-config;
                         enabled: status != SendStatus.Sending;
                         clicked => { load-config(); }
                     }
-                    SecondaryButton {
+
+                    Button {
                         text: tr-test-connection;
                         enabled: status != SendStatus.Sending;
                         clicked => { test-connection(); }
                     }
-                    PrimaryButton {
+
+                    FilledButton {
                         text: status == SendStatus.Sending ? tr-stop-send : tr-start-send;
-                        active: status != SendStatus.Sending;
                         clicked => {
                             if status == SendStatus.Sending {
                                 stop-send();
@@ -1132,9 +1186,9 @@ export component AppWindow inherits Window {
         }
     }
 
-    // ===== 消息对话框 =====
+    // ===== Message Dialog =====
     if show-message-dialog: Rectangle {
-        background: #00000066;
+        background: MaterialPalette.scrim.with-alpha(50%);
         width: 100%;
         height: 100%;
 
@@ -1145,37 +1199,38 @@ export component AppWindow inherits Window {
         Rectangle {
             x: (parent.width - self.width) / 2;
             y: (parent.height - self.height) / 2;
-            width: min(420px, parent.width - 40px);
-            height: 220px;
-            background: Theme.bg-card;
-            border-radius: Theme.radius-xl;
-            drop-shadow-blur: 32px;
-            drop-shadow-color: Theme.shadow-dark;
-            drop-shadow-offset-y: 8px;
+            width: min(380px, parent.width - 40px);
+            height: 180px;
+            background: MaterialPalette.surface_container_high;
+            border-radius: 16px;
 
             TouchArea {
-                // 阻止点击穿透
+                // Prevent click through
             }
 
             VerticalLayout {
-                padding: Theme.spacing-xl;
-                spacing: Theme.spacing-lg;
+                padding: 20px;
+                spacing: 12px;
 
-                // 标题
+                // Title
                 HorizontalLayout {
-                    spacing: Theme.spacing-md;
+                    spacing: 10px;
+                    alignment: start;
 
                     Rectangle {
-                        width: 40px;
-                        height: 40px;
-                        border-radius: 20px;
+                        width: 32px;
+                        height: 32px;
+                        border-radius: 16px;
                         background: message-dialog-is-error ?
-                            @linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%) :
-                            @linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+                            MaterialPalette.error_container :
+                            MaterialPalette.tertiary_container;
 
                         Text {
                             text: message-dialog-is-error ? "⚠" : "✓";
-                            font-size: 20px;
+                            font-size: 16px;
+                            color: message-dialog-is-error ?
+                                MaterialPalette.on_error_container :
+                                MaterialPalette.on_tertiary_container;
                             horizontal-alignment: center;
                             vertical-alignment: center;
                         }
@@ -1183,29 +1238,28 @@ export component AppWindow inherits Window {
 
                     Text {
                         text: message-dialog-title;
-                        font-size: 18px;
-                        font-weight: 700;
-                        color: message-dialog-is-error ? Theme.error : Theme.success;
+                        font-size: 16px;
+                        font-weight: 600;
+                        color: message-dialog-is-error ? MaterialPalette.error : MaterialPalette.tertiary;
                         vertical-alignment: center;
                     }
                 }
 
-                // 内容
+                // Content
                 Text {
                     text: message-dialog-content;
-                    font-size: 14px;
-                    color: Theme.text-primary;
+                    font-size: 13px;
+                    color: MaterialPalette.on_surface;
                     wrap: word-wrap;
                     vertical-stretch: 1;
                 }
 
-                // 按钮
+                // Button
                 HorizontalLayout {
-                    Rectangle { horizontal-stretch: 1; }
+                    alignment: end;
 
-                    PrimaryButton {
-                        text: "OK";
-                        active: true;
+                    FilledButton {
+                        text: tr-ok;
                         clicked => { close-message-dialog(); }
                     }
                 }

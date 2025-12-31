@@ -178,3 +178,56 @@ RSendMail now supports sending regular files as email attachments without the ne
 - No need to provide the `--dir` parameter when using attachment modes
 
 ### Template Variables
+
+- `{filename}`: Will be replaced with the actual filename (without path)
+
+## Multi-Language Support
+
+RSendMail supports multiple languages for both CLI and GUI interfaces:
+
+| Language | Code | Environment Variable |
+|----------|------|---------------------|
+| English | `en` | `RSENDMAIL_LANG=en` |
+| Simplified Chinese | `zh-CN` | `RSENDMAIL_LANG=zh-CN` |
+| Traditional Chinese | `zh-TW` | `RSENDMAIL_LANG=zh-TW` |
+| Japanese | `ja` | `RSENDMAIL_LANG=ja` |
+
+### Setting Language
+
+**Method 1: Environment Variable**
+```bash
+# Linux/macOS
+export RSENDMAIL_LANG=zh-CN
+rsendmail --help
+
+# Windows PowerShell
+$env:RSENDMAIL_LANG="zh-CN"
+rsendmail --help
+```
+
+**Method 2: Command-line Argument**
+```bash
+rsendmail --lang zh-CN --help
+```
+
+**Method 3: Automatic Detection**
+If no language is specified, RSendMail will automatically detect the system language from:
+1. `RSENDMAIL_LANG` environment variable
+2. `LANG` or `LC_ALL` environment variables
+3. System locale settings (macOS: AppleLocale)
+4. Default to English if detection fails
+
+### Language Examples
+
+```bash
+# Show help in English
+RSENDMAIL_LANG=en rsendmail --help
+
+# Show help in Simplified Chinese
+RSENDMAIL_LANG=zh-CN rsendmail --help
+
+# Show help in Japanese
+rsendmail --lang ja --help
+```
+
+## License

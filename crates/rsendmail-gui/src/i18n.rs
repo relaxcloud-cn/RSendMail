@@ -164,6 +164,8 @@ static TRANSLATIONS: LazyLock<HashMap<Language, HashMap<&'static str, &'static s
         en.insert("start-send", "Start Send");
         en.insert("stop-send", "Stop Send");
         en.insert("language", "Language");
+        en.insert("theme", "Theme");
+        en.insert("ok", "OK");
         en.insert("status-ready", "Ready");
         en.insert("status-preparing", "Preparing...");
         en.insert("status-sending", "Sending...");
@@ -243,6 +245,8 @@ static TRANSLATIONS: LazyLock<HashMap<Language, HashMap<&'static str, &'static s
         zh_cn.insert("start-send", "开始发送");
         zh_cn.insert("stop-send", "停止发送");
         zh_cn.insert("language", "语言");
+        zh_cn.insert("theme", "主题");
+        zh_cn.insert("ok", "确定");
         zh_cn.insert("status-ready", "就绪");
         zh_cn.insert("status-preparing", "准备中...");
         zh_cn.insert("status-sending", "发送中...");
@@ -322,6 +326,8 @@ static TRANSLATIONS: LazyLock<HashMap<Language, HashMap<&'static str, &'static s
         zh_tw.insert("start-send", "開始發送");
         zh_tw.insert("stop-send", "停止發送");
         zh_tw.insert("language", "語言");
+        zh_tw.insert("theme", "主題");
+        zh_tw.insert("ok", "確定");
         zh_tw.insert("status-ready", "就緒");
         zh_tw.insert("status-preparing", "準備中...");
         zh_tw.insert("status-sending", "發送中...");
@@ -401,6 +407,8 @@ static TRANSLATIONS: LazyLock<HashMap<Language, HashMap<&'static str, &'static s
         ja.insert("start-send", "送信開始");
         ja.insert("stop-send", "送信停止");
         ja.insert("language", "言語");
+        ja.insert("theme", "テーマ");
+        ja.insert("ok", "OK");
         ja.insert("status-ready", "準備完了");
         ja.insert("status-preparing", "準備中...");
         ja.insert("status-sending", "送信中...");

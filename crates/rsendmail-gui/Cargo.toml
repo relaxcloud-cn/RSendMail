@@ -18,7 +18,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 log = { workspace = true }
-simplelog = { workspace = true }
 chrono = { workspace = true }
 walkdir = { workspace = true }
 

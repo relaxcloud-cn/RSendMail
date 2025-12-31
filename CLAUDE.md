@@ -12,18 +12,29 @@ RSendMail is a high-performance Rust CLI tool for bulk email sending and testing
 RSendMail/
 ├── Cargo.toml                    # Workspace root configuration
 ├── crates/
-│   ├── rsendmail-core/           # Core library (shared by CLI and future GUI)
+│   ├── rsendmail-i18n/           # Shared internationalization (i18n) support
+│   │   ├── src/lib.rs            # Language enum, tr() functions
+│   │   └── locales/              # Translation files (YAML)
+│   │       ├── en-US.yml         # English translations
+│   │       ├── zh-CN.yml         # Simplified Chinese
+│   │       ├── zh-TW.yml         # Traditional Chinese
+│   │       └── ja-JP.yml         # Japanese
+│   ├── rsendmail-core/           # Core library (shared by CLI and GUI)
 │   │   └── src/
 │   │       ├── lib.rs            # Library entry point
 │   │       ├── config.rs         # Configuration structure (no CLI dependencies)
 │   │       ├── mailer.rs         # Core email sending logic
 │   │       ├── stats.rs          # Statistics collection
 │   │       └── anonymizer.rs     # Email anonymization
-│   └── rsendmail-cli/            # CLI application
+│   ├── rsendmail-cli/            # CLI application
+│   │   └── src/
+│   │       ├── main.rs           # CLI entry point
+│   │       ├── args.rs           # CLI argument parsing (clap builder pattern)
+│   │       └── logging.rs        # Logging initialization
+│   └── rsendmail-gui/            # GUI application (Slint-based)
 │       └── src/
-│           ├── main.rs           # CLI entry point
-│           ├── args.rs           # CLI argument parsing (clap)
-│           └── logging.rs        # Logging initialization
+│           ├── main.rs           # GUI entry point
+│           └── i18n.rs           # GUI-specific i18n helpers
 ├── rsendmail/                    # [DEPRECATED] Old single-crate structure
 └── docs/
     ├── ARCHITECTURE.md           # Architecture design document
@@ -78,9 +89,10 @@ The CLI application provides command-line interface:
 
 - `mail-send` / `mail-parser` / `mail-builder` - SMTP client and email handling
 - `tokio` - Async runtime (full features)
-- `clap` - CLI argument parsing with derive macros (CLI only)
+- `clap` - CLI argument parsing with builder pattern for runtime i18n (CLI only)
 - `simplelog` - Logging with optional file output (CLI only)
 - `serde` / `serde_json` - Configuration serialization (for future GUI)
+- `rust-i18n` - Internationalization support with YAML translation files
 
 ## Three Operating Modes
 
@@ -91,6 +103,44 @@ The CLI application provides command-line interface:
 ## Connection Handling
 
 The mailer implements connection problem detection (421 errors, Broken pipe, timeouts) with automatic RSET commands and connection reset. Failed emails can be saved to `--failed-emails-dir` for later analysis.
+
+## Internationalization (i18n)
+
+The project supports 4 languages: English, Simplified Chinese, Traditional Chinese, and Japanese.
+
+### i18n Architecture
+
+- **rsendmail-i18n crate** - Shared i18n module using `rust-i18n` library
+- Translation files in YAML format under `crates/rsendmail-i18n/locales/`
+- Key functions: `tr(key)` for simple translations, `tr_with_args(key, args)` for parameterized translations
+
+### Adding/Modifying Translations
+
+1. Edit YAML files in `crates/rsendmail-i18n/locales/`:
+   - `en-US.yml` - English (fallback)
+   - `zh-CN.yml` - Simplified Chinese
+   - `zh-TW.yml` - Traditional Chinese
+   - `ja-JP.yml` - Japanese
+
+2. Use placeholder format `%{name}` for variables in translations
+
+3. Call translations using:
+   ```rust
+   use rsendmail_i18n::{tr, tr_with_args};
+
+   // Simple translation
+   let msg = tr("core.mailer.interrupted");
+
+   // With parameters
+   let msg = tr_with_args("core.mailer.found_files", &[("count", "10")]);
+   ```
+
+### Language Detection Priority
+
+1. `--lang` CLI argument
+2. `RSENDMAIL_LANG` environment variable
+3. System locale (LANG, LC_ALL, or macOS AppleLocale)
+4. Default to English
 
 ## Design Documents
 

@@ -1,9 +1,9 @@
 use anyhow::Result;
+use log::{Level, Log, Metadata, Record, SetLoggerError};
 use rsendmail_core::{Config, Mailer, Stats};
-use simplelog::*;
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
@@ -22,14 +22,71 @@ enum SendEvent {
     Error { message: String },
 }
 
+// 自定义 Logger，同时输出到终端和 GUI
+struct GuiLogger {
+    tx: Mutex<Option<tokio::sync::mpsc::Sender<SendEvent>>>,
+}
+
+impl GuiLogger {
+    fn set_sender(&self, sender: tokio::sync::mpsc::Sender<SendEvent>) {
+        if let Ok(mut tx) = self.tx.lock() {
+            *tx = Some(sender);
+        }
+    }
+
+    fn clear_sender(&self) {
+        if let Ok(mut tx) = self.tx.lock() {
+            *tx = None;
+        }
+    }
+}
+
+impl Log for GuiLogger {
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        metadata.level() <= Level::Info
+    }
+
+    fn log(&self, record: &Record) {
+        if self.enabled(record.metadata()) {
+            let level = match record.level() {
+                Level::Error => "ERROR",
+                Level::Warn => "WARN",
+                Level::Info => "INFO",
+                Level::Debug => "DEBUG",
+                Level::Trace => "TRACE",
+            };
+            let message = format!("{}", record.args());
+
+            // 输出到终端
+            let time = chrono::Local::now().format("%H:%M:%S");
+            eprintln!("{} [{}] {}", time, level, message);
+
+            // 发送到 GUI（如果已设置）
+            if let Ok(tx_guard) = self.tx.lock() {
+                if let Some(tx) = tx_guard.as_ref() {
+                    let _ = tx.try_send(SendEvent::Log {
+                        level: level.to_string(),
+                        message,
+                    });
+                }
+            }
+        }
+    }
+
+    fn flush(&self) {}
+}
+
+static GUI_LOGGER: GuiLogger = GuiLogger {
+    tx: Mutex::new(None),
+};
+
+fn init_logger() -> Result<(), SetLoggerError> {
+    log::set_logger(&GUI_LOGGER).map(|()| log::set_max_level(log::LevelFilter::Info))
+}
+
 fn main() -> Result<()> {
-    // 初始化日志
-    TermLogger::init(
-        LevelFilter::Info,
-        ConfigBuilder::new().build(),
-        TerminalMode::Mixed,
-        ColorChoice::Auto,
-    )?;
+    // 初始化自定义日志
+    init_logger().expect("Failed to initialize logger");
 
     // 创建 Slint 应用
     let app = AppWindow::new()?;
@@ -143,6 +200,8 @@ fn update_ui_texts(app: &AppWindow) {
     app.set_tr_stop_send(i18n::t("stop-send").into());
 
     app.set_tr_language(i18n::t("language").into());
+    app.set_tr_theme(i18n::t("theme").into());
+    app.set_tr_ok(i18n::t("ok").into());
 
     // 更新状态文本
     update_status_text(app);
@@ -233,6 +292,9 @@ fn setup_callbacks(app: &AppWindow, running: Arc<AtomicBool>) {
             // 创建通道
             let (tx, mut rx) = mpsc::channel::<SendEvent>(100);
 
+            // 设置 logger sender，使 log crate 的日志也能发送到 GUI
+            GUI_LOGGER.set_sender(tx.clone());
+
             // 在后台线程运行发送任务
             let config_clone = config.clone();
             let running_clone = running.clone();
@@ -243,6 +305,8 @@ fn setup_callbacks(app: &AppWindow, running: Arc<AtomicBool>) {
                 rt.block_on(async move {
                     run_send_task(config_clone, running_clone, tx_clone).await;
                 });
+                // 任务结束后清除 sender
+                GUI_LOGGER.clear_sender();
             });
 
             // 在主线程处理事件
@@ -483,10 +547,17 @@ fn setup_callbacks(app: &AppWindow, running: Arc<AtomicBool>) {
 fn add_log(app: &AppWindow, level: &str, message: &str) {
     let timestamp = chrono::Local::now().format("%H:%M:%S").to_string();
 
+    // 清理消息中的多余空白字符：将制表符和多个连续空格替换为单个空格
+    let cleaned_message: String = message
+        .replace('\t', " ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+
     let entry = LogEntry {
         timestamp: timestamp.into(),
         level: level.into(),
-        message: message.into(),
+        message: cleaned_message.into(),
     };
 
     let logs = app.get_logs();
@@ -780,8 +851,13 @@ async fn run_send_task(config: Config, running: Arc<AtomicBool>, tx: mpsc::Sende
                     elapsed.as_secs() % 60
                 );
 
-                let success = stats.email_count - stats.send_errors - stats.parse_errors;
-                let fail = stats.send_errors + stats.parse_errors;
+                let total_errors = stats.send_errors + stats.parse_errors;
+                let success = if stats.email_count > total_errors {
+                    stats.email_count - total_errors
+                } else {
+                    0
+                };
+                let fail = total_errors;
                 let qps = if elapsed.as_secs_f32() > 0.0 {
                     stats.email_count as f32 / elapsed.as_secs_f32()
                 } else {

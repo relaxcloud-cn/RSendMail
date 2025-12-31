@@ -11,6 +11,7 @@
 
 ## 功能特点
 
+- **CLI 和 GUI 两种模式**：支持命令行和图形界面
 - 批量处理和发送多个邮件
 - 多线程处理提升性能
 - 支持自定义 SMTP 服务器配置
@@ -20,6 +21,7 @@
 - 支持在单个 SMTP 会话中批量发送
 - 支持发送普通文件作为附件
 - 支持批量发送目录中的所有文件作为单独的邮件
+- **多语言支持**：英文、简体中文、繁体中文、日文
 
 ## 附件功能说明
 
@@ -36,6 +38,57 @@ RSendMail现在支持将普通文件作为附件发送，无需先创建EML文�
 - 在附件模式下不需要提供`--dir`参数
 
 ### 模板变量
+
+- `{filename}`: 将被替换为实际的文件名（不含路径）
+
+## 多语言支持
+
+RSendMail 的 CLI 和 GUI 界面均支持多语言：
+
+| 语言 | 代码 | 环境变量 |
+|------|------|----------|
+| 英文 | `en` | `RSENDMAIL_LANG=en` |
+| 简体中文 | `zh-CN` | `RSENDMAIL_LANG=zh-CN` |
+| 繁体中文 | `zh-TW` | `RSENDMAIL_LANG=zh-TW` |
+| 日文 | `ja` | `RSENDMAIL_LANG=ja` |
+
+### 设置语言
+
+**方法一：环境变量**
+```bash
+# Linux/macOS
+export RSENDMAIL_LANG=zh-CN
+rsendmail --help
+
+# Windows PowerShell
+$env:RSENDMAIL_LANG="zh-CN"
+rsendmail --help
+```
+
+**方法二：命令行参数**
+```bash
+rsendmail --lang zh-CN --help
+```
+
+**方法三：自动检测**
+如果未指定语言，RSendMail 会自动按以下顺序检测系统语言：
+1. `RSENDMAIL_LANG` 环境变量
+2. `LANG` 或 `LC_ALL` 环境变量
+3. 系统区域设置（macOS: AppleLocale）
+4. 如果检测失败，默认使用英文
+
+### 语言示例
+
+```bash
+# 显示英文帮助
+RSENDMAIL_LANG=en rsendmail --help
+
+# 显示简体中文帮助
+RSENDMAIL_LANG=zh-CN rsendmail --help
+
+# 显示日文帮助
+rsendmail --lang ja --help
+```
 
 ## 构建
 
@@ -104,6 +157,7 @@ docker run --rm -v /path/to/emails:/data rsendmail --smtp-server <smtp服务器>
 - `--accept-invalid-certs`: 接受无效的TLS证书（仅当使用TLS时）。警告：这会降低安全性，请仅在信任目标服务器时使用。
 - `--failed-emails-dir`: 发送失败的EML文件保存目录（指定后会自动将失败的邮件复制到该目录，文件名会添加时间戳避免覆盖）
 - `--log-file`: 日志文件保存路径（如果指定，日志会同时输出到控制台和文件，方便保存运行记录）
+- `--lang`: 显示语言（en/zh-CN/zh-TW/ja），也可通过环境变量 `RSENDMAIL_LANG` 设置
 
 ## 日志级别
 

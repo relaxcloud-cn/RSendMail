@@ -1,0 +1,9 @@
+[package]
+name = "rsendmail-i18n"
+description = "Internationalization (i18n) support for RSendMail"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+rust-i18n = { workspace = true }

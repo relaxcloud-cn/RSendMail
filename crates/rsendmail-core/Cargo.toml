@@ -6,6 +6,7 @@ edition.workspace = true
 authors.workspace = true
 
 [dependencies]
+rsendmail-i18n = { path = "../rsendmail-i18n" }
 tokio = { workspace = true }
 futures = { workspace = true }
 mail-send = { workspace = true }

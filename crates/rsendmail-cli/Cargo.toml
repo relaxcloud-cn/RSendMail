@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 rsendmail-core = { path = "../rsendmail-core" }
+rsendmail-i18n = { path = "../rsendmail-i18n" }
 tokio = { workspace = true }
 clap = { workspace = true }
 simplelog = { workspace = true }

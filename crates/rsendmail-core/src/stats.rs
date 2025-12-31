@@ -1,3 +1,4 @@
+use rsendmail_i18n::{tr, tr_with_args};
 use std::collections::HashMap;
 use std::fmt;
 use std::time::Duration;
@@ -51,72 +52,112 @@ impl Stats {
 
 impl fmt::Display for Stats {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "邮件发送统计报告")?;
-        writeln!(f, "===================")?;
-        writeln!(f, "1. 基本统计")?;
-        writeln!(f, "    总计处理: {} 封邮件", self.email_count)?;
+        writeln!(f, "{}", tr("core.stats.report_title"))?;
+        writeln!(f, "{}", tr("core.stats.separator"))?;
+        writeln!(f, "{}", tr("core.stats.basic_stats"))?;
         writeln!(
             f,
-            "    成功发送: {} 封",
-            self.email_count - self.send_errors - self.parse_errors
+            "{}",
+            tr_with_args("core.stats.total_processed", &[("count", &self.email_count.to_string())])
         )?;
         writeln!(
             f,
-            "    总计失败: {} 封",
-            self.send_errors + self.parse_errors
+            "{}",
+            tr_with_args(
+                "core.stats.success_sent",
+                &[("count", &(self.email_count - self.send_errors - self.parse_errors).to_string())]
+            )
+        )?;
+        writeln!(
+            f,
+            "{}",
+            tr_with_args(
+                "core.stats.total_failed",
+                &[("count", &(self.send_errors + self.parse_errors).to_string())]
+            )
         )?;
 
         if !self.error_details.is_empty() {
-            writeln!(f, "\n2. 错误分类统计")?;
+            writeln!(f, "\n{}", tr("core.stats.error_classification"))?;
             let mut sorted_errors: Vec<_> = self.error_details.iter().collect();
             sorted_errors.sort_by(|a, b| b.1.cmp(a.1));
 
             for (error_type, count) in sorted_errors {
+                let percent = if self.email_count > 0 {
+                    (*count as f64 / self.email_count as f64) * 100.0
+                } else {
+                    0.0
+                };
                 writeln!(
                     f,
-                    "    {} - {} 封 ({:.1}%)",
-                    error_type,
-                    count,
-                    (*count as f64 / self.email_count as f64) * 100.0
+                    "{}",
+                    tr_with_args(
+                        "core.stats.error_type_count",
+                        &[
+                            ("type", error_type),
+                            ("count", &count.to_string()),
+                            ("percent", &format!("{:.1}", percent))
+                        ]
+                    )
                 )?;
                 if let Some(files) = self.failed_files.get(error_type) {
-                    writeln!(f, "    失败文件列表:")?;
+                    writeln!(f, "{}", tr("core.stats.failed_files_list"))?;
                     for file in files {
-                        writeln!(f, "        - {}", file)?;
+                        writeln!(
+                            f,
+                            "{}",
+                            tr_with_args("core.stats.failed_file_item", &[("file", file.as_str())])
+                        )?;
                     }
                 }
             }
         }
 
-        // 计算总的解析和发送时间
+        // Calculate total parse and send duration
         let total_parse_duration: Duration = self.parse_durations.iter().sum();
         let total_send_duration: Duration = self.send_durations.iter().sum();
 
-        // 计算解析QPS
+        // Calculate parse QPS
         let parse_qps = self.calculate_qps(self.email_count, total_parse_duration);
         writeln!(
             f,
-            "    邮件解析总耗时: {:.2}秒（所有进程总和），QPS: {:.2}封/秒",
-            total_parse_duration.as_secs_f64(),
-            parse_qps
+            "{}",
+            tr_with_args(
+                "core.stats.parse_duration",
+                &[
+                    ("seconds", &format!("{:.2}", total_parse_duration.as_secs_f64())),
+                    ("qps", &format!("{:.2}", parse_qps))
+                ]
+            )
         )?;
 
-        // 计算发送QPS
+        // Calculate send QPS
         let send_qps = self.calculate_qps(self.email_count, total_send_duration);
         writeln!(
             f,
-            "    邮件发送总耗时: {:.2}秒（所有进程总和），QPS: {:.2}封/秒",
-            total_send_duration.as_secs_f64(),
-            send_qps
+            "{}",
+            tr_with_args(
+                "core.stats.send_duration",
+                &[
+                    ("seconds", &format!("{:.2}", total_send_duration.as_secs_f64())),
+                    ("qps", &format!("{:.2}", send_qps))
+                ]
+            )
         )?;
 
-        // 计算实际总用时
+        // Calculate actual total time
         let total_secs = self.total_duration.as_secs_f64();
         let actual_qps = self.calculate_qps(self.email_count, self.total_duration);
         writeln!(
             f,
-            "    实际总用时: {:.2}秒, QPS: {:.2}封/秒",
-            total_secs, actual_qps
+            "{}",
+            tr_with_args(
+                "core.stats.actual_duration",
+                &[
+                    ("seconds", &format!("{:.2}", total_secs)),
+                    ("qps", &format!("{:.2}", actual_qps))
+                ]
+            )
         )?;
 
         Ok(())
