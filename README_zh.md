@@ -2,12 +2,22 @@
 
 用于批量发送邮件的高性能测试工具
 
-[English](README.md) | 简体中文
+[English](README.md) | 简体中文 | [繁體中文](README_zh-TW.md) | [日本語](README_ja.md)
 
 ![Release](https://img.shields.io/github/v/release/kpassy/RSendMail?color=blue&include_prereleases)
 ![License](https://img.shields.io/github/license/kpassy/RSendMail)
 ![Stars](https://img.shields.io/github/stars/kpassy/RSendMail?style=social)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/relaxcloud-cn/RSendMail)
+
+## 界面截图
+
+| English | 简体中文 |
+|---------|----------|
+| ![English](assets/screenshots/en.png) | ![简体中文](assets/screenshots/zh-ch.png) |
+
+| 繁體中文 | 日本語 |
+|----------|--------|
+| ![繁體中文](assets/screenshots/zh-hk.png) | ![日本語](assets/screenshots/ja.png) |
 
 ## 功能特点
 
@@ -193,3 +203,11 @@ rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to r
 # 批量发送目录中的所有文件为独立的邮件（不需要--dir参数）
 rsendmail --smtp-server 192.168.1.100 --port 25 --from sender@example.com --to recipient@example.com --attachment-dir ./documents --subject-template "文件: {filename}"
 ```
+
+## 文档
+
+- [架构设计](docs/ARCHITECTURE_zh.md) - 详细的架构和设计文档
+
+## 许可证
+
+MIT License

@@ -2,12 +2,22 @@
 
 A high-performance testing tool for bulk email sending
 
-English | [简体中文](README_zh.md)
+English | [简体中文](README_zh.md) | [繁體中文](README_zh-TW.md) | [日本語](README_ja.md)
 
 ![Release](https://img.shields.io/github/v/release/kpassy/RSendMail?color=blue&include_prereleases)
 ![License](https://img.shields.io/github/license/kpassy/RSendMail)
 ![Stars](https://img.shields.io/github/stars/kpassy/RSendMail?style=social)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/relaxcloud-cn/RSendMail)
+
+## Screenshots
+
+| English | 简体中文 |
+|---------|----------|
+| ![English](assets/screenshots/en.png) | ![Simplified Chinese](assets/screenshots/zh-ch.png) |
+
+| 繁體中文 | 日本語 |
+|----------|--------|
+| ![Traditional Chinese](assets/screenshots/zh-hk.png) | ![Japanese](assets/screenshots/ja.png) |
 
 ## Features
 
@@ -229,5 +239,9 @@ RSENDMAIL_LANG=zh-CN rsendmail --help
 # Show help in Japanese
 rsendmail --lang ja --help
 ```
+
+## Documentation
+
+- [Architecture Design](docs/ARCHITECTURE.md) - Detailed architecture and design documentation
 
 ## License
