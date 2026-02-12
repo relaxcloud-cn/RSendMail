@@ -7,7 +7,7 @@ cli:
   smtp_server: "SMTP server address"
   port: "SMTP server port"
   from: "Sender email address (optional in EML mode, extracted from EML file)"
-  to: "Recipient email address, comma separated (optional in EML mode, extracted from EML To header only, not Cc/Bcc)"
+  to: "Recipient email address, comma separated (optional in EML mode, extracted from EML To header; use --envelope-cc-bcc to include Cc/Bcc)"
   dir: "Directory containing email files"
   extension: "Email file extension"
   processes: "Number of processes (auto for CPU cores, or specify a number)"
@@ -35,6 +35,7 @@ cli:
   accept_invalid_certs: "Accept invalid/self-signed certificates"
   failed_emails_dir: "Directory to save failed email files"
   log_file: "Log file path (logs to both console and file if specified)"
+  envelope_cc_bcc: "Include Cc/Bcc recipients as SMTP RCPT TO in EML mode"
   lang: "Display language (en/zh-CN/zh-TW/ja)"
 
 # ===== Core Library - Mailer Messages =====

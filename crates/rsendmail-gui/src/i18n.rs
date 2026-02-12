@@ -142,6 +142,7 @@ static TRANSLATIONS: LazyLock<HashMap<Language, HashMap<&'static str, &'static s
         en.insert("email-processing", "Email Processing");
         en.insert("keep-headers", "Keep Original Headers");
         en.insert("modify-headers", "Modify Headers");
+        en.insert("envelope-cc-bcc", "Envelope Cc/Bcc");
         en.insert("anonymize-emails", "Anonymize Emails");
         en.insert("domain", "Domain");
         en.insert("logging", "Logging & Error Handling");
@@ -223,6 +224,7 @@ static TRANSLATIONS: LazyLock<HashMap<Language, HashMap<&'static str, &'static s
         zh_cn.insert("email-processing", "邮件处理");
         zh_cn.insert("keep-headers", "保留原始邮件头");
         zh_cn.insert("modify-headers", "修改邮件头");
+        zh_cn.insert("envelope-cc-bcc", "信封包含 Cc/Bcc");
         zh_cn.insert("anonymize-emails", "匿名化邮箱");
         zh_cn.insert("domain", "域名");
         zh_cn.insert("logging", "日志与错误处理");
@@ -304,6 +306,7 @@ static TRANSLATIONS: LazyLock<HashMap<Language, HashMap<&'static str, &'static s
         zh_tw.insert("email-processing", "郵件處理");
         zh_tw.insert("keep-headers", "保留原始郵件標頭");
         zh_tw.insert("modify-headers", "修改郵件標頭");
+        zh_tw.insert("envelope-cc-bcc", "信封包含 Cc/Bcc");
         zh_tw.insert("anonymize-emails", "匿名化郵箱");
         zh_tw.insert("domain", "網域");
         zh_tw.insert("logging", "日誌與錯誤處理");
@@ -385,6 +388,7 @@ static TRANSLATIONS: LazyLock<HashMap<Language, HashMap<&'static str, &'static s
         ja.insert("email-processing", "メール処理");
         ja.insert("keep-headers", "元のヘッダーを保持");
         ja.insert("modify-headers", "ヘッダーを変更");
+        ja.insert("envelope-cc-bcc", "エンベロープ Cc/Bcc");
         ja.insert("anonymize-emails", "メールを匿名化");
         ja.insert("domain", "ドメイン");
         ja.insert("logging", "ログとエラー処理");

@@ -243,6 +243,7 @@ export component AppWindow inherits Window {
     in-out property <string> tr-email-processing: "Processing";
     in-out property <string> tr-keep-headers: "Keep Hdr";
     in-out property <string> tr-modify-headers: "Mod Hdr";
+    in-out property <string> tr-envelope-cc-bcc: "Envelope Cc/Bcc";
     in-out property <string> tr-anonymize-emails: "Anon";
     in-out property <string> tr-domain: "Domain";
     in-out property <string> tr-logging: "Logging";
@@ -316,6 +317,7 @@ export component AppWindow inherits Window {
     in-out property <string> retry-interval-str: "5";
     in-out property <bool> keep-headers: false;
     in-out property <bool> modify-headers: false;
+    in-out property <bool> envelope-cc-bcc: false;
     in-out property <bool> anonymize-emails: false;
     in-out property <string> anonymize-domain: "example.com";
     in-out property <string> log-level: "info";
@@ -898,6 +900,7 @@ export component AppWindow inherits Window {
 
                                 SwitchRow { label: tr-keep-headers; checked <=> keep-headers; }
                                 SwitchRow { label: tr-modify-headers; checked <=> modify-headers; }
+                                SwitchRow { label: tr-envelope-cc-bcc; checked <=> envelope-cc-bcc; }
                                 SwitchRow { label: tr-anonymize-emails; checked <=> anonymize-emails; }
                             }
 

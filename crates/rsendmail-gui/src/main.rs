@@ -174,6 +174,7 @@ fn update_ui_texts(app: &AppWindow) {
     app.set_tr_email_processing(i18n::t("email-processing").into());
     app.set_tr_keep_headers(i18n::t("keep-headers").into());
     app.set_tr_modify_headers(i18n::t("modify-headers").into());
+    app.set_tr_envelope_cc_bcc(i18n::t("envelope-cc-bcc").into());
     app.set_tr_anonymize_emails(i18n::t("anonymize-emails").into());
     app.set_tr_domain(i18n::t("domain").into());
     app.set_tr_logging(i18n::t("logging").into());
@@ -605,6 +606,10 @@ fn parse_usize(s: &str, default: usize) -> usize {
     s.parse().unwrap_or(default)
 }
 
+fn non_empty(s: String) -> Option<String> {
+    if s.is_empty() { None } else { Some(s) }
+}
+
 fn build_config_from_ui(app: &AppWindow) -> Config {
     let send_mode = app.get_send_mode();
 
@@ -631,8 +636,9 @@ fn build_config_from_ui(app: &AppWindow) -> Config {
     Config {
         smtp_server: app.get_smtp_server().to_string(),
         port: parse_u16(app.get_smtp_port_str().as_ref(), 25),
-        from: { let f = app.get_from_address().to_string(); if f.is_empty() { None } else { Some(f) } },
-        to: { let t = app.get_to_address().to_string(); if t.is_empty() { None } else { Some(t) } },
+        from: non_empty(app.get_from_address().to_string()),
+        to: non_empty(app.get_to_address().to_string()),
+        envelope_cc_bcc: app.get_envelope_cc_bcc(),
         dir,
         extension: app.get_eml_extension().to_string(),
         processes: app.get_processes().to_string(),
@@ -725,6 +731,7 @@ fn apply_config_to_ui(app: &AppWindow, config: &Config) {
     app.set_retry_interval_str(config.retry_interval.to_string().into());
     app.set_keep_headers(config.keep_headers);
     app.set_modify_headers(config.modify_headers);
+    app.set_envelope_cc_bcc(config.envelope_cc_bcc);
     app.set_anonymize_emails(config.anonymize_emails);
     app.set_anonymize_domain(config.anonymize_domain.clone().into());
     app.set_log_level(config.log_level.clone().into());
@@ -779,10 +786,10 @@ fn validate_config(config: &Config, app: &AppWindow) -> Result<(), String> {
     }
 
     if config.auth_mode {
-        if config.username.as_ref().is_none_or(|s| s.is_empty()) {
+        if config.username.as_ref().map_or(true, |s| s.is_empty()) {
             return Err(i18n::t("error-no-username"));
         }
-        if config.password.as_ref().is_none_or(|s| s.is_empty()) {
+        if config.password.as_ref().map_or(true, |s| s.is_empty()) {
             return Err(i18n::t("error-no-password"));
         }
     }
