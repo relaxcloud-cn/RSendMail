@@ -15,9 +15,13 @@ pub struct Config {
     #[serde(default)]
     pub from: Option<String>,
 
-    /// 收件人邮箱地址 (多个地址请用逗号分隔，EML模式下可选，将从EML文件的To头提取，不含Cc/Bcc)
+    /// 收件人邮箱地址 (多个地址请用逗号分隔，EML模式下可选，将从EML文件的To头提取；使用envelope_cc_bcc可包含Cc/Bcc)
     #[serde(default)]
     pub to: Option<String>,
+
+    /// 在EML模式下，是否将Cc/Bcc头中的地址也作为SMTP RCPT TO收件人
+    #[serde(default)]
+    pub envelope_cc_bcc: bool,
 
     /// 邮件文件所在目录
     pub dir: Option<String>,
@@ -196,6 +200,7 @@ impl Default for Config {
             port: default_port(),
             from: None,
             to: None,
+            envelope_cc_bcc: false,
             dir: None,
             extension: default_extension(),
             processes: default_processes(),

@@ -43,7 +43,8 @@ pub fn build_cli() -> Command {
             Arg::new("dir")
                 .long("dir")
                 .help(tr("cli.dir"))
-                .required_unless_present_any(["attachment", "attachment_dir"]),
+                .required_unless_present_any(["attachment", "attachment_dir"])
+                .conflicts_with_all(["attachment", "attachment_dir"]),
         )
         .arg(
             Arg::new("extension")
@@ -76,6 +77,12 @@ pub fn build_cli() -> Command {
                 .default_value("info"),
         )
         // Boolean flags
+        .arg(
+            Arg::new("envelope_cc_bcc")
+                .long("envelope-cc-bcc")
+                .help(tr("cli.envelope_cc_bcc"))
+                .action(ArgAction::SetTrue),
+        )
         .arg(
             Arg::new("keep_headers")
                 .long("keep-headers")
@@ -254,6 +261,7 @@ fn matches_to_config(matches: &ArgMatches) -> Config {
             .unwrap_or(25),
         from: matches.get_one::<String>("from").cloned(),
         to: matches.get_one::<String>("to").cloned(),
+        envelope_cc_bcc: matches.get_flag("envelope_cc_bcc"),
         dir: matches.get_one::<String>("dir").cloned(),
         extension: matches.get_one::<String>("extension").unwrap().clone(),
         processes: matches.get_one::<String>("processes").unwrap().clone(),
