@@ -24,13 +24,13 @@ pub fn build_cli() -> Command {
             Arg::new("from")
                 .long("from")
                 .help(tr("cli.from"))
-                .required(true),
+                .required_unless_present("dir"),
         )
         .arg(
             Arg::new("to")
                 .long("to")
                 .help(tr("cli.to"))
-                .required(true),
+                .required_unless_present("dir"),
         )
         // Optional arguments with defaults
         .arg(
@@ -252,8 +252,8 @@ fn matches_to_config(matches: &ArgMatches) -> Config {
             .unwrap()
             .parse()
             .unwrap_or(25),
-        from: matches.get_one::<String>("from").unwrap().clone(),
-        to: matches.get_one::<String>("to").unwrap().clone(),
+        from: matches.get_one::<String>("from").cloned(),
+        to: matches.get_one::<String>("to").cloned(),
         dir: matches.get_one::<String>("dir").cloned(),
         extension: matches.get_one::<String>("extension").unwrap().clone(),
         processes: matches.get_one::<String>("processes").unwrap().clone(),

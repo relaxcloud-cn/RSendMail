@@ -11,11 +11,13 @@ pub struct Config {
     #[serde(default = "default_port")]
     pub port: u16,
 
-    /// 发件人邮箱地址
-    pub from: String,
+    /// 发件人邮箱地址（EML模式下可选，将从EML文件的From头提取）
+    #[serde(default)]
+    pub from: Option<String>,
 
-    /// 收件人邮箱地址 (多个地址请用逗号分隔)
-    pub to: String,
+    /// 收件人邮箱地址 (多个地址请用逗号分隔，EML模式下可选，将从EML文件的To头提取，不含Cc/Bcc)
+    #[serde(default)]
+    pub to: Option<String>,
 
     /// 邮件文件所在目录
     pub dir: Option<String>,
@@ -192,8 +194,8 @@ impl Default for Config {
         Self {
             smtp_server: String::new(),
             port: default_port(),
-            from: String::new(),
-            to: String::new(),
+            from: None,
+            to: None,
             dir: None,
             extension: default_extension(),
             processes: default_processes(),

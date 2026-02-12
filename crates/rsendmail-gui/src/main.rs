@@ -245,7 +245,7 @@ fn setup_callbacks(app: &AppWindow, running: Arc<AtomicBool>) {
                 show_error(&app, &i18n::t("error-no-smtp-server"));
                 return;
             }
-            if config.from.is_empty() {
+            if config.from.as_ref().map_or(true, |s| s.is_empty()) {
                 show_error(&app, &i18n::t("error-no-sender"));
                 return;
             }
@@ -631,8 +631,8 @@ fn build_config_from_ui(app: &AppWindow) -> Config {
     Config {
         smtp_server: app.get_smtp_server().to_string(),
         port: parse_u16(app.get_smtp_port_str().as_ref(), 25),
-        from: app.get_from_address().to_string(),
-        to: app.get_to_address().to_string(),
+        from: { let f = app.get_from_address().to_string(); if f.is_empty() { None } else { Some(f) } },
+        to: { let t = app.get_to_address().to_string(); if t.is_empty() { None } else { Some(t) } },
         dir,
         extension: app.get_eml_extension().to_string(),
         processes: app.get_processes().to_string(),
@@ -686,8 +686,8 @@ fn build_config_from_ui(app: &AppWindow) -> Config {
 fn apply_config_to_ui(app: &AppWindow, config: &Config) {
     app.set_smtp_server(config.smtp_server.clone().into());
     app.set_smtp_port_str(config.port.to_string().into());
-    app.set_from_address(config.from.clone().into());
-    app.set_to_address(config.to.clone().into());
+    app.set_from_address(config.from.clone().unwrap_or_default().into());
+    app.set_to_address(config.to.clone().unwrap_or_default().into());
     app.set_use_tls(config.use_tls);
     app.set_accept_invalid_certs(config.accept_invalid_certs);
     app.set_auth_mode(config.auth_mode);
@@ -747,14 +747,19 @@ fn validate_config(config: &Config, app: &AppWindow) -> Result<(), String> {
     if config.smtp_server.is_empty() {
         return Err(i18n::t("error-no-smtp-server"));
     }
-    if config.from.is_empty() {
-        return Err(i18n::t("error-no-sender"));
-    }
-    if config.to.is_empty() {
-        return Err(i18n::t("error-no-recipient"));
+    let send_mode = app.get_send_mode();
+
+    // EML模式下from/to可选（将从EML文件提取），其他模式下必填
+    let is_eml_mode = matches!(send_mode, SendMode::EmlBatch);
+    if !is_eml_mode {
+        if config.from.as_ref().map_or(true, |s| s.is_empty()) {
+            return Err(i18n::t("error-no-sender"));
+        }
+        if config.to.as_ref().map_or(true, |s| s.is_empty()) {
+            return Err(i18n::t("error-no-recipient"));
+        }
     }
 
-    let send_mode = app.get_send_mode();
     match send_mode {
         SendMode::EmlBatch => {
             if config.dir.is_none() {
