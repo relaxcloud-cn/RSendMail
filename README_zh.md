@@ -9,6 +9,7 @@
 ![Stars](https://img.shields.io/github/stars/kpassy/RSendMail?style=social)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/relaxcloud-cn/RSendMail)
 
+
 ## 界面截图
 
 | English | 简体中文 |
