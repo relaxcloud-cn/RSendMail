@@ -186,8 +186,8 @@ impl Config {
             ProcessMode::Auto
         } else {
             match self.processes.parse::<usize>() {
-                Ok(n) => ProcessMode::Fixed(n),
-                Err(_) => ProcessMode::Auto,
+                Ok(n) if n > 0 => ProcessMode::Fixed(n),
+                _ => ProcessMode::Auto,
             }
         }
     }

@@ -1,6 +1,7 @@
 use log::LevelFilter;
+use rsendmail_i18n::tr_with_args;
 use simplelog::*;
-use std::fs::File;
+use std::fs::OpenOptions;
 
 pub fn init_logging(level: LevelFilter, log_file: Option<&str>) {
     // 配置日志格式
@@ -10,9 +11,20 @@ pub fn init_logging(level: LevelFilter, log_file: Option<&str>) {
     let log_config = config_builder.build();
 
     if let Some(log_file_path) = log_file {
-        // 如果指定了日志文件，同时输出到控制台和文件
-        let log_file = File::create(log_file_path)
-            .unwrap_or_else(|e| panic!("无法创建日志文件 {}: {}", log_file_path, e));
+        // 如果指定了日志文件，同时输出到控制台和文件（追加模式）
+        let log_file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log_file_path)
+            .unwrap_or_else(|e| {
+                panic!(
+                    "{}",
+                    tr_with_args(
+                        "cli_logging.create_log_file_failed",
+                        &[("path", log_file_path), ("error", &e.to_string())]
+                    )
+                )
+            });
 
         CombinedLogger::init(vec![
             TermLogger::new(
@@ -23,12 +35,15 @@ pub fn init_logging(level: LevelFilter, log_file: Option<&str>) {
             ),
             WriteLogger::new(level, log_config, log_file),
         ])
-        .unwrap_or_else(|e| panic!("初始化日志失败: {}", e));
+        .unwrap_or_else(|e| panic!("{}", tr_with_args("cli_logging.init_log_failed", &[("error", &e.to_string())])));
 
-        log::info!("日志将同时输出到控制台和文件: {}", log_file_path);
+        log::info!(
+            "{}",
+            tr_with_args("cli_logging.log_to_console_and_file", &[("path", log_file_path)])
+        );
     } else {
         // 如果没有指定日志文件，只输出到控制台
         TermLogger::init(level, log_config, TerminalMode::Mixed, ColorChoice::Auto)
-            .unwrap_or_else(|e| panic!("初始化日志失败: {}", e));
+            .unwrap_or_else(|e| panic!("{}", tr_with_args("cli_logging.init_log_failed", &[("error", &e.to_string())])));
     }
 }

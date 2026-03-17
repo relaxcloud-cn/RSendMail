@@ -119,8 +119,8 @@ impl fmt::Display for Stats {
         let total_parse_duration: Duration = self.parse_durations.iter().sum();
         let total_send_duration: Duration = self.send_durations.iter().sum();
 
-        // Calculate parse QPS
-        let parse_qps = self.calculate_qps(self.email_count, total_parse_duration);
+        // Calculate parse QPS (use parse_durations.len() as actual parsed count)
+        let parse_qps = self.calculate_qps(self.parse_durations.len(), total_parse_duration);
         writeln!(
             f,
             "{}",

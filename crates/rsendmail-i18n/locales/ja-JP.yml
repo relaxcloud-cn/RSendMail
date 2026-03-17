@@ -202,8 +202,9 @@ cli_main:
 
 # ===== CLI ログメッセージ =====
 cli_logging:
-  create_log_file_failed: "ログファイルの作成に失敗"
-  init_log_failed: "ログの初期化に失敗"
+  create_log_file_failed: "ログファイルの作成に失敗 %{path}: %{error}"
+  init_log_failed: "ログの初期化に失敗: %{error}"
+  log_to_console_and_file: "コンソールとファイルの両方にログ出力: %{path}"
 
 # ===== GUI ラベル =====
 gui:

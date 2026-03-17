@@ -37,11 +37,14 @@ async fn main() -> anyhow::Result<()> {
     // Create mailer
     let mailer = Mailer::new(config.clone());
 
-    // Set iteration count
-    let mut iteration_count = if config.r#loop {
-        u32::MAX
+    // Set iteration count (None means infinite loop)
+    let mut remaining = if config.r#loop {
+        None // true infinite loop
+    } else if config.repeat == 0 {
+        warn!("{}", tr_with_args("cli_main.starting_round", &[("current", "0"), ("total", "0")]));
+        return Ok(()); // --repeat 0 means no iterations
     } else {
-        config.repeat
+        Some(config.repeat)
     };
 
     // Track overall statistics
@@ -51,7 +54,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Main send loop
     let mut current_iteration = 1;
-    while iteration_count > 0 && running.load(Ordering::SeqCst) {
+    while remaining.map_or(true, |r| r > 0) && running.load(Ordering::SeqCst) {
         let total_str = if config.r#loop {
             "∞".to_string()
         } else {
@@ -114,7 +117,7 @@ async fn main() -> anyhow::Result<()> {
                 info!("{}", stats);
 
                 // Wait before next iteration if not the last one
-                if iteration_count > 1 && running.load(Ordering::SeqCst) {
+                if remaining.map_or(true, |r| r > 1) && running.load(Ordering::SeqCst) {
                     info!(
                         "{}",
                         tr_with_args(
@@ -153,7 +156,9 @@ async fn main() -> anyhow::Result<()> {
         }
 
         current_iteration += 1;
-        iteration_count -= 1;
+        if let Some(ref mut r) = remaining {
+            *r -= 1;
+        }
     }
 
     // Show overall stats

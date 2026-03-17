@@ -202,8 +202,9 @@ cli_main:
 
 # ===== CLI Logging Messages =====
 cli_logging:
-  create_log_file_failed: "Failed to create log file"
-  init_log_failed: "Failed to initialize logging"
+  create_log_file_failed: "Failed to create log file %{path}: %{error}"
+  init_log_failed: "Failed to initialize logging: %{error}"
+  log_to_console_and_file: "Logging to both console and file: %{path}"
 
 # ===== GUI Labels =====
 gui:

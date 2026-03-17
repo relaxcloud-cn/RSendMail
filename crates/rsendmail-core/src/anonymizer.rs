@@ -20,23 +20,29 @@ impl EmailAnonymizer {
     }
 
     // 对文本内容进行匿名化处理
+    // 使用 replace_all 一次性替换，避免子串匹配导致的双重替换问题
     pub fn anonymize_text(&mut self, text: &str) -> String {
-        let mut result = text.to_string();
+        let anonymizer = &mut self.map;
+        let domain = &self.target_domain;
 
-        // 找出所有匹配的邮箱地址
-        let matches: Vec<_> = self
-            .email_regex
-            .find_iter(text)
-            .map(|cap| (cap.start(), cap.end(), cap.as_str().to_string()))
-            .collect();
-
-        // 对每个邮箱地址进行匿名化处理
-        for (_, _, email) in matches {
-            let anonymized = self.get_anonymized_email(&email);
-            result = result.replace(&email, &anonymized);
-        }
-
-        result
+        self.email_regex
+            .replace_all(text, |caps: &regex::Captures| {
+                let email = caps[0].to_string();
+                anonymizer
+                    .entry(email.clone())
+                    .or_insert_with(|| {
+                        let random_string: String = rand::thread_rng()
+                            .sample_iter(&Alphanumeric)
+                            .take(8)
+                            .map(|c| c as char)
+                            .collect();
+                        let anonymized = format!("{}@{}", random_string, domain);
+                        debug!("匿名化邮箱: {} -> {}", email, anonymized);
+                        anonymized
+                    })
+                    .clone()
+            })
+            .to_string()
     }
 
     // 对二进制内容（如邮件文件）进行匿名化处理
@@ -50,26 +56,6 @@ impl EmailAnonymizer {
         anonymized.into_bytes()
     }
 
-    // 获取或生成匿名化后的邮箱
-    fn get_anonymized_email(&mut self, email: &str) -> String {
-        if let Some(anonymized) = self.map.get(email) {
-            return anonymized.clone();
-        }
-
-        // 生成随机字符串作为邮箱用户名部分
-        let random_string: String = rand::thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(8)
-            .map(|c| c as char)
-            .collect();
-
-        let anonymized = format!("{}@{}", random_string, self.target_domain);
-
-        debug!("匿名化邮箱: {} -> {}", email, anonymized);
-        self.map.insert(email.to_string(), anonymized.clone());
-
-        anonymized
-    }
 }
 
 #[cfg(test)]

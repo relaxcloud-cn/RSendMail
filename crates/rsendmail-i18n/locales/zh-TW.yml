@@ -202,8 +202,9 @@ cli_main:
 
 # ===== CLI 日誌訊息 =====
 cli_logging:
-  create_log_file_failed: "無法建立日誌檔案"
-  init_log_failed: "初始化日誌失敗"
+  create_log_file_failed: "無法建立日誌檔案 %{path}: %{error}"
+  init_log_failed: "初始化日誌失敗: %{error}"
+  log_to_console_and_file: "日誌將同時輸出到控制台和檔案: %{path}"
 
 # ===== GUI 標籤 =====
 gui:

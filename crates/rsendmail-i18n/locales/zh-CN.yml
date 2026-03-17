@@ -202,8 +202,9 @@ cli_main:
 
 # ===== CLI 日志消息 =====
 cli_logging:
-  create_log_file_failed: "无法创建日志文件"
-  init_log_failed: "初始化日志失败"
+  create_log_file_failed: "无法创建日志文件 %{path}: %{error}"
+  init_log_failed: "初始化日志失败: %{error}"
+  log_to_console_and_file: "日志将同时输出到控制台和文件: %{path}"
 
 # ===== GUI 标签 =====
 gui:
