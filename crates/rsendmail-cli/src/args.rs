@@ -216,15 +216,9 @@ pub fn build_cli() -> Command {
 
 /// Detect language from command line args or environment
 /// This is called before full CLI parsing to set the language
+/// Priority: 1. --lang CLI argument  2. RSENDMAIL_LANG env var  3. System locale
 pub fn detect_language() -> Language {
-    // First check environment variable
-    if let Ok(lang_str) = std::env::var("RSENDMAIL_LANG") {
-        if let Some(lang) = Language::from_str(&lang_str) {
-            return lang;
-        }
-    }
-
-    // Then check command line args for --lang
+    // First check command line args for --lang (highest priority)
     let args: Vec<String> = std::env::args().collect();
     for i in 0..args.len() {
         if args[i] == "--lang" && i + 1 < args.len() {
@@ -237,6 +231,13 @@ pub fn detect_language() -> Language {
             if let Some(lang) = Language::from_str(lang_str) {
                 return lang;
             }
+        }
+    }
+
+    // Then check environment variable
+    if let Ok(lang_str) = std::env::var("RSENDMAIL_LANG") {
+        if let Some(lang) = Language::from_str(&lang_str) {
+            return lang;
         }
     }
 

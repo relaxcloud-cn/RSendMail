@@ -55,17 +55,19 @@ impl fmt::Display for Stats {
         writeln!(f, "{}", tr("core.stats.report_title"))?;
         writeln!(f, "{}", tr("core.stats.separator"))?;
         writeln!(f, "{}", tr("core.stats.basic_stats"))?;
+        let total_failed = self.send_errors + self.parse_errors;
+        let total_processed = self.email_count + total_failed;
         writeln!(
             f,
             "{}",
-            tr_with_args("core.stats.total_processed", &[("count", &self.email_count.to_string())])
+            tr_with_args("core.stats.total_processed", &[("count", &total_processed.to_string())])
         )?;
         writeln!(
             f,
             "{}",
             tr_with_args(
                 "core.stats.success_sent",
-                &[("count", &(self.email_count - self.send_errors - self.parse_errors).to_string())]
+                &[("count", &self.email_count.to_string())]
             )
         )?;
         writeln!(
@@ -73,7 +75,7 @@ impl fmt::Display for Stats {
             "{}",
             tr_with_args(
                 "core.stats.total_failed",
-                &[("count", &(self.send_errors + self.parse_errors).to_string())]
+                &[("count", &total_failed.to_string())]
             )
         )?;
 
@@ -83,8 +85,8 @@ impl fmt::Display for Stats {
             sorted_errors.sort_by(|a, b| b.1.cmp(a.1));
 
             for (error_type, count) in sorted_errors {
-                let percent = if self.email_count > 0 {
-                    (*count as f64 / self.email_count as f64) * 100.0
+                let percent = if total_processed > 0 {
+                    (*count as f64 / total_processed as f64) * 100.0
                 } else {
                     0.0
                 };
