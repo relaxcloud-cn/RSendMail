@@ -6,8 +6,8 @@ cli:
   about: "高效能批次郵件發送 CLI 工具"
   smtp_server: "SMTP 伺服器地址"
   port: "SMTP 伺服器連接埠"
-  from: "寄件人郵箱地址"
-  to: "收件人郵箱地址（多個地址請用逗號分隔）"
+  from: "寄件人郵箱地址（EML模式下可選，將從EML檔案的From頭提取）"
+  to: "收件人郵箱地址，多個地址請用逗號分隔（EML模式下可選，從EML檔案的To頭提取；使用 --envelope-cc-bcc 可包含Cc/Bcc）"
   dir: "郵件檔案所在目錄"
   extension: "郵件檔案副檔名"
   processes: "處理程序數（auto 表示自動設定為 CPU 核心數，或指定具體數字）"
@@ -35,6 +35,7 @@ cli:
   accept_invalid_certs: "是否接受無效的憑證"
   failed_emails_dir: "發送失敗的 EML 檔案儲存目錄"
   log_file: "日誌檔案儲存路徑（如果指定，日誌會同時輸出到主控台和檔案）"
+  envelope_cc_bcc: "EML 模式下將 Cc/Bcc 收件人也加入 SMTP RCPT TO"
   lang: "顯示語言（en/zh-CN/zh-TW/ja）"
 
 # ===== 核心函式庫 - 郵件發送訊息 =====

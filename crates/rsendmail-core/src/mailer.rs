@@ -30,6 +30,48 @@ struct EmailContent<'a> {
     html_content: &'a Option<String>,
 }
 
+/// 从 mail_parser 的地址列表中提取第一个邮箱地址
+fn extract_first_email(addrs: Option<&mail_parser::Address>) -> Option<String> {
+    addrs.and_then(|addr| {
+        addr.iter()
+            .find_map(|a| a.address.as_ref().map(|s| s.to_string()))
+    })
+}
+
+/// 从 mail_parser 的地址列表中提取所有邮箱地址
+fn extract_all_emails(addrs: Option<&mail_parser::Address>) -> Vec<String> {
+    addrs.map_or_else(Vec::new, |addr| {
+        addr.iter()
+            .filter_map(|a| a.address.as_ref().map(|s| s.to_string()))
+            .collect()
+    })
+}
+
+/// 从 EML 提取所有 RCPT TO 收件人
+/// 如果 include_cc_bcc 为 true，还会提取 Cc 和 Bcc 中的地址（去重）
+fn extract_all_recipients(message: &mail_parser::Message, include_cc_bcc: bool) -> Vec<String> {
+    let mut recipients = extract_all_emails(message.to());
+    if include_cc_bcc {
+        recipients.extend(extract_all_emails(message.cc()));
+        recipients.extend(extract_all_emails(message.bcc()));
+        let mut seen = std::collections::HashSet::new();
+        recipients.retain(|addr| seen.insert(addr.to_lowercase()));
+    }
+    recipients
+}
+
+/// 从 config.to 解析全局收件人列表，并过滤空字符串
+fn parse_global_recipients(config: &Config) -> Option<Vec<String>> {
+    config.to.as_ref()
+        .filter(|s| !s.is_empty())
+        .map(|to_str| {
+            to_str.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
+}
+
 pub struct Mailer {
     config: Config,
 }
@@ -283,8 +325,17 @@ impl Mailer {
                 .map(|template| Self::process_template(template, &filename));
 
             let empty_params = Parameters::default();
+            let from_addr = match self.config.from.as_deref() {
+                Some(addr) if !addr.is_empty() => addr,
+                _ => {
+                    let msg = tr_with_args("core.mailer.set_sender_failed", &[("error", "no sender address specified")]);
+                    error!("{}", msg);
+                    stats.increment_error(&msg, file_path);
+                    continue;
+                }
+            };
             if let Err(e) = client
-                .mail_from(self.config.from.as_str(), &empty_params)
+                .mail_from(from_addr, &empty_params)
                 .await
             {
                 let msg = tr_with_args("core.mailer.set_sender_failed", &[("error", &e.to_string())]);
@@ -293,8 +344,16 @@ impl Mailer {
                 continue;
             }
 
-            let recipients_str = self.config.to.as_str();
-            let recipients: Vec<&str> = recipients_str
+            let to_str = match self.config.to.as_deref() {
+                Some(s) if !s.is_empty() => s,
+                _ => {
+                    let msg = tr_with_args("core.mailer.all_recipients_failed", &[("path", file_path)]);
+                    error!("{}", msg);
+                    stats.increment_error(&msg, file_path);
+                    continue;
+                }
+            };
+            let recipients: Vec<&str> = to_str
                 .split(',')
                 .map(|s| s.trim())
                 .filter(|s| !s.is_empty())
@@ -303,7 +362,7 @@ impl Mailer {
             if recipients.is_empty() {
                 let msg = tr_with_args(
                     "core.mailer.set_recipient_failed_for",
-                    &[("recipient", recipients_str), ("path", file_path), ("error", "empty")]
+                    &[("recipient", to_str), ("path", file_path), ("error", "empty")]
                 );
                 error!("{}", msg);
                 stats.increment_error(&tr("core.mailer.all_recipients_failed"), file_path);
@@ -349,7 +408,7 @@ impl Mailer {
             };
 
             let mut builder = MessageBuilder::new()
-                .from(("", self.config.from.as_str()))
+                .from(("", from_addr))
                 .to(recipients) // Pass Vec<&str>
                 .subject(&subject)
                 .text_body(&text_content);
@@ -456,8 +515,20 @@ impl Mailer {
         let send_start = Instant::now();
         let empty_params = Parameters::default();
 
+        let from_addr = match self.config.from.as_deref() {
+            Some(addr) if !addr.is_empty() => addr,
+            _ => {
+                let msg = tr_with_args(
+                    "core.mailer.set_sender_failed_for",
+                    &[("path", attachment_path), ("error", "no sender address specified")]
+                );
+                error!("{}", msg);
+                stats.increment_error(&msg, attachment_path);
+                return Ok(());
+            }
+        };
         if let Err(e) = client
-            .mail_from(self.config.from.as_str(), &empty_params)
+            .mail_from(from_addr, &empty_params)
             .await
         {
             let msg = tr_with_args(
@@ -466,12 +537,22 @@ impl Mailer {
             );
             error!("{}", msg);
             stats.increment_error(&msg, attachment_path);
-            return Ok(()); // Logged error, but function itself completed its attempt
+            return Ok(());
         }
 
-        let recipients: Vec<&str> = self
-            .config
-            .to
+        let to_str = match self.config.to.as_deref() {
+            Some(s) if !s.is_empty() => s,
+            _ => {
+                let msg = tr_with_args(
+                    "core.mailer.all_recipients_failed",
+                    &[("path", attachment_path)]
+                );
+                error!("{}", msg);
+                stats.increment_error(&msg, attachment_path);
+                return Ok(());
+            }
+        };
+        let recipients: Vec<&str> = to_str
             .split(',')
             .map(|s| s.trim())
             .filter(|s| !s.is_empty())
@@ -529,7 +610,7 @@ impl Mailer {
         };
 
         let mut builder = MessageBuilder::new()
-            .from(("", self.config.from.as_str()))
+            .from(("", from_addr))
             .to(recipients) // Pass Vec<&str>
             .subject(email_content.subject)
             .text_body(email_content.text_content);
@@ -814,6 +895,10 @@ impl Mailer {
         running: Arc<AtomicBool>,
     ) -> Result<()> {
         let start = Instant::now();
+        if files.is_empty() {
+            info!("{}", tr("core.mailer.directory_empty"));
+            return Ok(());
+        }
         let chunk_size = files.len().div_ceil(num_processes);
 
         let mut handles = vec![];
@@ -1206,21 +1291,8 @@ impl Mailer {
             None
         };
 
-        let base_recipients_str = config.to.as_str();
-        let base_recipients: Vec<&str> = base_recipients_str
-            .split(',')
-            .map(|s| s.trim())
-            .filter(|s| !s.is_empty())
-            .collect();
-
-        if base_recipients.is_empty() {
-            warn!(
-                "全局收件人地址 (config.to) 为空或无效: {}",
-                base_recipients_str
-            );
-            // If global 'to' is empty, all emails in this batch will fail for missing recipients.
-            // We'll add an error for each file to reflect this in the loop if needed.
-        }
+        // 构建全局收件人列表（如果CLI指定了--to）
+        let global_recipients = parse_global_recipients(config);
 
         for (email_idx, file_path) in files.iter().enumerate() {
             if !running.load(Ordering::SeqCst) {
@@ -1230,10 +1302,6 @@ impl Mailer {
             let mut had_error_this_email = false;
             let mut current_file_parse_duration: Option<Duration> = None;
             let parse_start = Instant::now();
-
-            // current_recipients will be the same as base_recipients for this function's scope
-            // as it's not modified per email file here.
-            let current_recipients = base_recipients.clone();
 
             let content_read_result = fs::read(file_path);
 
@@ -1276,14 +1344,42 @@ impl Mailer {
                     let empty_params = Parameters::default();
                     let mut email_send_op_failed = false;
 
+                    // 确定发件人地址：优先使用CLI指定的--from，否则从EML提取
+                    let envelope_from = if let Some(ref from) = config.from.as_ref().filter(|s| !s.is_empty()) {
+                        from.to_string()
+                    } else {
+                        match extract_first_email(message.from()) {
+                            Some(addr) => {
+                                info!("使用EML文件中的发件人地址: {} for {}", addr, file_path);
+                                addr
+                            }
+                            None => {
+                                error!("send_batch_emails: 无法从EML文件中提取发件人地址: {}", file_path);
+                                failures.push(("无法从EML文件中提取发件人地址".to_string(), file_path.to_string()));
+                                Self::save_failed_email(config, file_path);
+                                continue;
+                            }
+                        }
+                    };
+
+                    // 确定收件人地址：优先使用CLI指定的--to，否则从EML提取
+                    let current_recipients: Vec<String> = if let Some(ref recips) = global_recipients {
+                        recips.clone()
+                    } else {
+                        let eml_recipients = extract_all_recipients(&message, config.envelope_cc_bcc);
+                        if !eml_recipients.is_empty() {
+                            info!("使用EML文件中的收件人地址: {:?} for {}", eml_recipients, file_path);
+                        }
+                        eml_recipients
+                    };
+
                     if current_recipients.is_empty() {
-                        // This check is important if base_recipients could be empty
                         error!(
                             "send_batch_emails: 没有有效的收件人地址 for {}: {}",
-                            file_path, config.to
+                            file_path, config.to.as_deref().unwrap_or("<from EML>")
                         );
                         failures.push((
-                            format!("没有有效的收件人地址: {}", config.to),
+                            format!("没有有效的收件人地址: {}", config.to.as_deref().unwrap_or("<from EML>")),
                             file_path.to_string(),
                         ));
                         Self::save_failed_email(config, file_path);
@@ -1291,7 +1387,7 @@ impl Mailer {
                     }
 
                     if !email_send_op_failed {
-                        if let Err(e) = client.mail_from(config.from.as_str(), &empty_params).await
+                        if let Err(e) = client.mail_from(&envelope_from, &empty_params).await
                         {
                             error!("send_batch_emails: 设置发件人失败 for {}: {}", file_path, e);
                             let error_msg = format!("设置发件人失败: {}", e);
@@ -1321,7 +1417,7 @@ impl Mailer {
                     if !email_send_op_failed {
                         let mut any_rcpt_succeeded = false;
                         for recipient in &current_recipients {
-                            if let Err(e) = client.rcpt_to(recipient, &empty_params).await {
+                            if let Err(e) = client.rcpt_to(recipient.as_str(), &empty_params).await {
                                 error!(
                                     "send_batch_emails: 设置收件人 {} 失败 for {}: {}",
                                     recipient, file_path, e
@@ -1357,9 +1453,10 @@ impl Mailer {
                             let subject = message.subject().unwrap_or("No Subject").to_string();
                             let text_content = message.body_text(0).unwrap_or_default().to_string();
                             let html_content = message.body_html(0).map(|s| s.to_string());
+                            let recipients_str: Vec<&str> = current_recipients.iter().map(|s| s.as_str()).collect();
                             let mut builder = MessageBuilder::new()
-                                .from(("", config.from.as_str()))
-                                .to(current_recipients.clone())
+                                .from(("", envelope_from.as_str()))
+                                .to(recipients_str)
                                 .subject(&subject)
                                 .text_body(&text_content);
                             if let Some(html) = &html_content {
@@ -1498,21 +1595,8 @@ impl Mailer {
             None
         };
 
-        let base_recipients_str = config.to.as_str();
-        let base_recipients: Vec<&str> = base_recipients_str
-            .split(',')
-            .map(|s| s.trim())
-            .filter(|s| !s.is_empty())
-            .collect();
-
-        if base_recipients.is_empty() {
-            warn!(
-                "进程组 {}: 全局收件人地址 (config.to) 为空或无效: {}",
-                process_group_id, base_recipients_str
-            );
-            // If global 'to' is empty, all emails in this batch will fail for missing recipients.
-            // We'll add an error for each file to reflect this in the loop if needed.
-        }
+        // 构建全局收件人列表（如果CLI指定了--to）
+        let global_recipients = parse_global_recipients(config);
 
         for (email_idx, file_path) in files.iter().enumerate() {
             if !running.load(Ordering::SeqCst) {
@@ -1525,8 +1609,6 @@ impl Mailer {
             let mut had_error_this_email = false;
             let mut current_file_parse_duration: Option<Duration> = None;
             let parse_start = Instant::now();
-
-            let current_recipients = base_recipients.clone();
 
             let content_read_result = fs::read(file_path);
 
@@ -1581,13 +1663,42 @@ impl Mailer {
                     let empty_params = Parameters::default();
                     let mut email_send_op_failed = false;
 
+                    // 确定发件人地址：优先使用CLI指定的--from，否则从EML提取
+                    let envelope_from = if let Some(ref from) = config.from.as_ref().filter(|s| !s.is_empty()) {
+                        from.to_string()
+                    } else {
+                        match extract_first_email(message.from()) {
+                            Some(addr) => {
+                                info!("进程组 {}: 使用EML文件中的发件人地址: {} for {}", process_group_id, addr, file_path);
+                                addr
+                            }
+                            None => {
+                                error!("进程组 {}: 无法从EML文件中提取发件人地址: {}", process_group_id, file_path);
+                                group_stats.3.push(("无法从EML文件中提取发件人地址".to_string(), file_path.to_string()));
+                                Self::save_failed_email(config, file_path);
+                                continue;
+                            }
+                        }
+                    };
+
+                    // 确定收件人地址：优先使用CLI指定的--to，否则从EML提取
+                    let current_recipients: Vec<String> = if let Some(ref recips) = global_recipients {
+                        recips.clone()
+                    } else {
+                        let eml_recipients = extract_all_recipients(&message, config.envelope_cc_bcc);
+                        if !eml_recipients.is_empty() {
+                            info!("进程组 {}: 使用EML文件中的收件人地址: {:?} for {}", process_group_id, eml_recipients, file_path);
+                        }
+                        eml_recipients
+                    };
+
                     if current_recipients.is_empty() {
                         error!(
                             "进程组 {}: 没有有效的收件人地址 for {}: {}",
-                            process_group_id, file_path, config.to
+                            process_group_id, file_path, config.to.as_deref().unwrap_or("<from EML>")
                         );
                         group_stats.3.push((
-                            format!("没有有效的收件人地址: {}", config.to),
+                            format!("没有有效的收件人地址: {}", config.to.as_deref().unwrap_or("<from EML>")),
                             file_path.to_string(),
                         ));
                         Self::save_failed_email(config, file_path);
@@ -1595,7 +1706,7 @@ impl Mailer {
                     }
 
                     if !email_send_op_failed {
-                        if let Err(e) = client.mail_from(config.from.as_str(), &empty_params).await
+                        if let Err(e) = client.mail_from(&envelope_from, &empty_params).await
                         {
                             error!(
                                 "进程组 {}: 设置发件人失败 for {}: {}",
@@ -1629,7 +1740,7 @@ impl Mailer {
                     if !email_send_op_failed {
                         let mut any_rcpt_succeeded = false;
                         for recipient in &current_recipients {
-                            if let Err(e) = client.rcpt_to(recipient, &empty_params).await {
+                            if let Err(e) = client.rcpt_to(recipient.as_str(), &empty_params).await {
                                 error!(
                                     "进程组 {}: 设置收件人 {} 失败 for {}: {}",
                                     process_group_id, recipient, file_path, e
@@ -1671,9 +1782,10 @@ impl Mailer {
                             let subject = message.subject().unwrap_or("No Subject").to_string();
                             let text_content = message.body_text(0).unwrap_or_default().to_string();
                             let html_content = message.body_html(0).map(|s| s.to_string());
+                            let recipients_str: Vec<&str> = current_recipients.iter().map(|s| s.as_str()).collect();
                             let mut builder = MessageBuilder::new()
-                                .from(("", config.from.as_str()))
-                                .to(current_recipients.clone())
+                                .from(("", envelope_from.as_str()))
+                                .to(recipients_str)
                                 .subject(&subject)
                                 .text_body(&text_content);
                             if let Some(html) = &html_content {

@@ -6,8 +6,8 @@ cli:
   about: "高性能バルクメール送信 CLI ツール"
   smtp_server: "SMTP サーバーアドレス"
   port: "SMTP サーバーポート"
-  from: "送信者メールアドレス"
-  to: "受信者メールアドレス（複数はカンマ区切り）"
+  from: "送信者メールアドレス（EMLモードではオプション、EMLファイルのFromヘッダーから取得）"
+  to: "受信者メールアドレス、複数はカンマ区切り（EMLモードではオプション、EMLファイルのToヘッダーから取得；--envelope-cc-bcc でCc/Bccも含む）"
   dir: "メールファイルのディレクトリ"
   extension: "メールファイルの拡���子"
   processes: "プロセス数（auto で CPU コア数に自動設定、または数値を指定）"
@@ -35,6 +35,7 @@ cli:
   accept_invalid_certs: "無効な証明書を受け入れる"
   failed_emails_dir: "送信失敗した EML ファイルの保存ディレクトリ"
   log_file: "ログファイルパス（指定時はコンソールとファイル両方に出力）"
+  envelope_cc_bcc: "EML モードで Cc/Bcc 受信者も SMTP RCPT TO に含める"
   lang: "表示言語（en/zh-CN/zh-TW/ja）"
 
 # ===== コアライブラリ - メーラーメッセージ =====
