@@ -62,10 +62,13 @@ component StatCard inherits Rectangle {
     in property <string> value: "0";
     in property <color> accent-color: MaterialPalette.primary;
 
-    background: MaterialPalette.surface_container_low;
-    border-radius: 12px;
+    background: AppTheme.dark-mode ? #2C2C2E.with-alpha(80%) : #FFFFFF.with-alpha(80%);
+    border-radius: 16px;
     border-width: 1px;
-    border-color: MaterialPalette.outline_variant;
+    border-color: AppTheme.dark-mode ? #3A3A3C : #E5E5EA;
+    drop-shadow-blur: 8px;
+    drop-shadow-color: AppTheme.dark-mode ? #000000.with-alpha(30%) : #000000.with-alpha(5%);
+    drop-shadow-offset-y: 2px;
 
     VerticalLayout {
         padding: 12px;
@@ -81,8 +84,8 @@ component StatCard inherits Rectangle {
 
         Text {
             text: value;
-            font-size: 28px;
-            font-weight: 700;
+            font-size: 26px;
+            font-weight: 800;
             color: accent-color;
             horizontal-alignment: center;
         }
@@ -120,8 +123,8 @@ component LogItem inherits Rectangle {
 
         Rectangle {
             width: 48px;
-            height: 20px;
-            border-radius: 4px;
+            height: 22px;
+            border-radius: 6px;
             background: level-color;
 
             Text {
@@ -157,9 +160,9 @@ component SectionHeader inherits Rectangle {
 
         Text {
             text: title;
-            font-size: 14px;
-            font-weight: 600;
-            color: MaterialPalette.primary;
+            font-size: 15px;
+            font-weight: 700;
+            color: AppTheme.dark-mode ? #0A84FF : #007AFF; // Premium iOS-like Blue Accent
             vertical-alignment: center;
         }
     }
@@ -200,7 +203,7 @@ export component AppWindow inherits Window {
     min-height: 600px;
     preferred-width: 1200px;
     preferred-height: 800px;
-    background: MaterialPalette.surface;
+    background: AppTheme.dark-mode ? #1C1C1E : #F5F5F7; // Premium unified background
     default-font-family: "Noto Sans CJK SC";
 
     // ===== i18n Translation Properties =====
@@ -472,8 +475,8 @@ export component AppWindow inherits Window {
                     // SMTP Server Section
                     OutlinedCard {
                         VerticalLayout {
-                            padding: 16px;
-                            spacing: 10px;
+                            padding: 20px;
+                            spacing: 12px;
 
                             SectionHeader { title: tr-smtp-server; }
 
@@ -604,8 +607,8 @@ export component AppWindow inherits Window {
                     // Send Mode Section
                     OutlinedCard {
                         VerticalLayout {
-                            padding: 16px;
-                            spacing: 10px;
+                            padding: 20px;
+                            spacing: 12px;
 
                             SectionHeader { title: tr-send-mode; }
 
@@ -666,19 +669,20 @@ export component AppWindow inherits Window {
 
                                     LineEdit {
                                         text <=> eml-extension;
-                                        width: 60px;
+                                        width: 80px;
                                     }
 
                                     if eml-file-count > 0: Rectangle {
-                                        background: MaterialPalette.tertiary_container;
+                                        background: AppTheme.dark-mode ? #3A3A3C : #E5E5EA;
                                         border-radius: 10px;
-                                        height: 20px;
-                                        width: 80px;
+                                        height: 22px;
+                                        width: 90px;
 
                                         Text {
                                             text: "Found: " + eml-file-count;
                                             font-size: 11px;
-                                            color: MaterialPalette.on_tertiary_container;
+                                            font-weight: 600;
+                                            color: AppTheme.dark-mode ? #FFFFFF : #1C1C1E;
                                             horizontal-alignment: center;
                                             vertical-alignment: center;
                                         }
@@ -826,8 +830,8 @@ export component AppWindow inherits Window {
                     // Advanced Options Section
                     OutlinedCard {
                         VerticalLayout {
-                            padding: 16px;
-                            spacing: 10px;
+                            padding: 20px;
+                            spacing: 12px;
 
                             SectionHeader { title: tr-advanced-options; }
 
@@ -936,8 +940,8 @@ export component AppWindow inherits Window {
                 // Statistics
                 OutlinedCard {
                     VerticalLayout {
-                        padding: 16px;
-                        spacing: 12px;
+                        padding: 20px;
+                        spacing: 16px;
 
                         SectionHeader { title: tr-statistics; }
 
@@ -1037,8 +1041,8 @@ export component AppWindow inherits Window {
                     vertical-stretch: 1;
 
                     VerticalLayout {
-                        padding: 16px;
-                        spacing: 8px;
+                        padding: 20px;
+                        spacing: 12px;
 
                         SectionHeader { title: tr-send-log; }
 
@@ -1090,18 +1094,18 @@ export component AppWindow inherits Window {
                     alignment: center;
 
                     Rectangle {
-                        width: 8px;
-                        height: 8px;
-                        border-radius: 4px;
+                        width: 10px;
+                        height: 10px;
+                        border-radius: 5px;
                         background: status == SendStatus.Idle ? MaterialPalette.outline :
-                                   (status == SendStatus.Sending ? MaterialPalette.tertiary :
-                                   (status == SendStatus.Completed ? MaterialPalette.primary : MaterialPalette.secondary));
+                                   (status == SendStatus.Sending ? AppTheme.dark-mode ? #0A84FF : #007AFF :
+                                   (status == SendStatus.Completed ? #34C759 : #FF9F0A));
                     }
 
                     Text {
                         text: status-text;
-                        font-size: 12px;
-                        font-weight: 500;
+                        font-size: 13px;
+                        font-weight: 600;
                         color: MaterialPalette.on_surface;
                         vertical-alignment: center;
                     }
