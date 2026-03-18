@@ -246,7 +246,7 @@ fn setup_callbacks(app: &AppWindow, running: Arc<AtomicBool>) {
                 show_error(&app, &i18n::t("error-no-smtp-server"));
                 return;
             }
-            if config.from.as_ref().map_or(true, |s| s.is_empty()) {
+            if config.from.as_ref().is_none_or(|s| s.is_empty()) {
                 show_error(&app, &i18n::t("error-no-sender"));
                 return;
             }
@@ -607,7 +607,11 @@ fn parse_usize(s: &str, default: usize) -> usize {
 }
 
 fn non_empty(s: String) -> Option<String> {
-    if s.is_empty() { None } else { Some(s) }
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
 }
 
 fn build_config_from_ui(app: &AppWindow) -> Config {
@@ -759,10 +763,10 @@ fn validate_config(config: &Config, app: &AppWindow) -> Result<(), String> {
     // EML模式下from/to可选（将从EML文件提取），其他模式下必填
     let is_eml_mode = matches!(send_mode, SendMode::EmlBatch);
     if !is_eml_mode {
-        if config.from.as_ref().map_or(true, |s| s.is_empty()) {
+        if config.from.as_ref().is_none_or(|s| s.is_empty()) {
             return Err(i18n::t("error-no-sender"));
         }
-        if config.to.as_ref().map_or(true, |s| s.is_empty()) {
+        if config.to.as_ref().is_none_or(|s| s.is_empty()) {
             return Err(i18n::t("error-no-recipient"));
         }
     }
@@ -786,10 +790,10 @@ fn validate_config(config: &Config, app: &AppWindow) -> Result<(), String> {
     }
 
     if config.auth_mode {
-        if config.username.as_ref().map_or(true, |s| s.is_empty()) {
+        if config.username.as_ref().is_none_or(|s| s.is_empty()) {
             return Err(i18n::t("error-no-username"));
         }
-        if config.password.as_ref().map_or(true, |s| s.is_empty()) {
+        if config.password.as_ref().is_none_or(|s| s.is_empty()) {
             return Err(i18n::t("error-no-password"));
         }
     }
@@ -864,11 +868,7 @@ async fn run_send_task(config: Config, running: Arc<AtomicBool>, tx: mpsc::Sende
                 );
 
                 let total_errors = stats.send_errors + stats.parse_errors;
-                let success = if stats.email_count > total_errors {
-                    stats.email_count - total_errors
-                } else {
-                    0
-                };
+                let success = stats.email_count.saturating_sub(total_errors);
                 let fail = total_errors;
                 let qps = if elapsed.as_secs_f32() > 0.0 {
                     stats.email_count as f32 / elapsed.as_secs_f32()

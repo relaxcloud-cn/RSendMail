@@ -1,0 +1,119 @@
+import {
+    FilledButton, TextButton, TonalButton,
+    OutlinedCard, FilledCard, ElevatedCard,
+    TextField, Switch, CheckBox, LinearProgressIndicator,
+    ScrollView, MaterialPalette, MaterialStyleMetrics,
+    MaterialTypography, MaterialText, SegmentedButton, ListTile
+} from "@material";
+
+import { ComboBox, Palette, Button, LineEdit } from "std-widgets.slint";
+import { AppTheme, SendStatus, LogEntry, StatCard, SectionHeader, LogItem } from "./common.slint";
+
+export component MonitoringPanel inherits VerticalLayout {
+    in property <string> tr-statistics;
+    in property <string> tr-total;
+    in property <string> tr-success;
+    in property <string> tr-failed;
+    in property <string> tr-current-round;
+    in property <string> tr-elapsed-time;
+    in property <string> tr-send-log;
+    in property <string> tr-clear;
+    in property <string> tr-export-log;
+
+    in-out property <int> total-count;
+    in-out property <int> sent-count;
+    in-out property <int> success-count;
+    in-out property <int> fail-count;
+    in-out property <float> qps;
+    in-out property <string> elapsed-time;
+    in-out property <int> current-round;
+    in-out property <int> total-rounds;
+    
+    in-out property <[LogEntry]> logs;
+
+    callback clear-logs();
+    callback export-logs();
+
+    horizontal-stretch: 1;
+    spacing: 12px;
+
+    // Statistics
+    OutlinedCard {
+        VerticalLayout {
+            padding: 20px;
+            spacing: 16px;
+
+            SectionHeader { title: root.tr-statistics; }
+
+            HorizontalLayout {
+                spacing: 8px;
+                StatCard { horizontal-stretch: 1; label: root.tr-total; value: root.total-count; accent-color: MaterialPalette.primary; }
+                StatCard { horizontal-stretch: 1; label: root.tr-success; value: root.success-count; accent-color: MaterialPalette.tertiary; }
+                StatCard { horizontal-stretch: 1; label: root.tr-failed; value: root.fail-count; accent-color: MaterialPalette.error; }
+                StatCard { horizontal-stretch: 1; label: "QPS"; value: round(root.qps * 10) / 10; accent-color: MaterialPalette.secondary; }
+            }
+
+            Rectangle {
+                height: 8px;
+                border-radius: 4px;
+                background: MaterialPalette.surface_container_highest;
+
+                Rectangle {
+                    width: parent.width * (root.total-count > 0 ? (root.sent-count / root.total-count) : 0);
+                    height: parent.height;
+                    border-radius: 4px;
+                    background: MaterialPalette.primary;
+
+                    animate width { duration: 500ms; easing: ease-in-out; }
+                }
+            }
+
+            HorizontalLayout {
+                spacing: 16px;
+                alignment: start;
+                HorizontalLayout {
+                    spacing: 4px;
+                    Text { text: root.tr-current-round + ":"; font-size: 13px; color: MaterialPalette.on_surface_variant; vertical-alignment: center; }
+                    Text { text: root.current-round + "/" + root.total-rounds; font-size: 13px; font-weight: 600; color: MaterialPalette.on_surface; vertical-alignment: center; }
+                }
+
+                HorizontalLayout {
+                    spacing: 4px;
+                    Text { text: root.tr-elapsed-time + ":"; font-size: 13px; color: MaterialPalette.on_surface_variant; vertical-alignment: center; }
+                    Text { text: root.elapsed-time; font-size: 13px; font-weight: 600; color: MaterialPalette.on_surface; vertical-alignment: center; }
+                }
+            }
+        }
+    }
+
+    // Logs
+    OutlinedCard {
+        vertical-stretch: 1;
+        VerticalLayout {
+            padding: 20px;
+            spacing: 12px;
+
+            SectionHeader { title: root.tr-send-log; }
+
+            ScrollView {
+                vertical-stretch: 1;
+                VerticalLayout {
+                    spacing: 4px;
+                    alignment: start;
+                    for entry in root.logs: LogItem {
+                        timestamp: entry.timestamp;
+                        level: entry.level;
+                        message: entry.message;
+                    }
+                }
+            }
+
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: start;
+                Button { text: root.tr-clear; clicked => { root.clear-logs(); } }
+                Button { text: root.tr-export-log; clicked => { root.export-logs(); } }
+            }
+        }
+    }
+}

@@ -23,3 +23,17 @@ Cargo.lock
 test_data/*
 
 .DS_Store
+
+# Node.js and Vite builds
+node_modules/
+dist/
+dist-ssr/
+.vite/
+coverage/
+*.tsbuildinfo
+*.local
+.env.*.local
+
+# Tauri specific
+crates/rsendmail-tauri/src-tauri/target/
+crates/rsendmail-tauri/src-tauri/gen/

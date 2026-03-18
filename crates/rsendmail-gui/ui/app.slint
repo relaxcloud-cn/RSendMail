@@ -25,170 +25,12 @@ import {
 // Standard widgets (for components not in Material library)
 import { ComboBox, Palette, Button, LineEdit } from "std-widgets.slint";
 
-// Embed full CJK font for complete Chinese character support
 import "../fonts/NotoSansSC-Full.otf";
 
-// ===== App Theme State =====
-export global AppTheme {
-    in-out property <bool> dark-mode: false;
-}
+import { ConfigPanel } from "./components/config_panel.slint";
+import { MonitoringPanel } from "./components/monitoring_panel.slint";
 
-// ===== Send Status Enum =====
-export enum SendStatus {
-    Idle,
-    Preparing,
-    Sending,
-    Stopped,
-    Completed
-}
-
-// ===== Send Mode Enum =====
-export enum SendMode {
-    EmlBatch,
-    SingleAttachment,
-    DirAttachment
-}
-
-// ===== Log Entry Struct =====
-export struct LogEntry {
-    timestamp: string,
-    level: string,
-    message: string,
-}
-
-// ===== Stat Card Component =====
-component StatCard inherits Rectangle {
-    in property <string> label: "";
-    in property <string> value: "0";
-    in property <color> accent-color: MaterialPalette.primary;
-
-    background: AppTheme.dark-mode ? #2C2C2E.with-alpha(80%) : #FFFFFF.with-alpha(80%);
-    border-radius: 16px;
-    border-width: 1px;
-    border-color: AppTheme.dark-mode ? #3A3A3C : #E5E5EA;
-    drop-shadow-blur: 8px;
-    drop-shadow-color: AppTheme.dark-mode ? #000000.with-alpha(30%) : #000000.with-alpha(5%);
-    drop-shadow-offset-y: 2px;
-
-    VerticalLayout {
-        padding: 12px;
-        spacing: 4px;
-        alignment: center;
-
-        Text {
-            text: label;
-            font-size: 12px;
-            color: MaterialPalette.on_surface_variant;
-            horizontal-alignment: center;
-        }
-
-        Text {
-            text: value;
-            font-size: 26px;
-            font-weight: 800;
-            color: accent-color;
-            horizontal-alignment: center;
-        }
-    }
-}
-
-// ===== Log Item Component =====
-component LogItem inherits Rectangle {
-    in property <string> timestamp: "";
-    in property <string> level: "INFO";
-    in property <string> message: "";
-
-    property <color> level-color: level == "ERROR" ? MaterialPalette.error :
-                                   (level == "WARN" ? #d97706 : MaterialPalette.primary);
-    property <color> bg-color: level == "ERROR" ? MaterialPalette.error_container :
-                                (level == "WARN" ? #fef3c7 : MaterialPalette.surface_container);
-
-    background: bg-color;
-    border-radius: 6px;
-    height: 36px;
-
-    HorizontalLayout {
-        padding-left: 10px;
-        padding-right: 10px;
-        spacing: 8px;
-        alignment: start;
-
-        Text {
-            text: timestamp;
-            font-size: 11px;
-            color: MaterialPalette.on_surface_variant;
-            vertical-alignment: center;
-            width: 60px;
-        }
-
-        Rectangle {
-            width: 48px;
-            height: 22px;
-            border-radius: 6px;
-            background: level-color;
-
-            Text {
-                text: level;
-                font-size: 10px;
-                font-weight: 600;
-                color: white;
-                horizontal-alignment: center;
-                vertical-alignment: center;
-            }
-        }
-
-        Text {
-            text: message;
-            font-size: 12px;
-            color: MaterialPalette.on_surface;
-            overflow: elide;
-            horizontal-stretch: 1;
-            vertical-alignment: center;
-        }
-    }
-}
-
-// ===== Section Header Component =====
-component SectionHeader inherits Rectangle {
-    in property <string> title: "";
-
-    height: 32px;
-
-    HorizontalLayout {
-        padding-left: 4px;
-        alignment: start;
-
-        Text {
-            text: title;
-            font-size: 15px;
-            font-weight: 700;
-            color: AppTheme.dark-mode ? #0A84FF : #007AFF; // Premium iOS-like Blue Accent
-            vertical-alignment: center;
-        }
-    }
-}
-
-// ===== Switch Row Component =====
-component SwitchRow inherits HorizontalLayout {
-    in property <string> label: "";
-    in-out property <bool> checked: false;
-
-    spacing: 8px;
-    alignment: start;
-
-    Switch {
-        width: 52px;
-        height: 32px;
-        checked <=> root.checked;
-    }
-
-    Text {
-        text: label;
-        font-size: 13px;
-        color: MaterialPalette.on_surface;
-        vertical-alignment: center;
-    }
-}
+import { AppTheme, SendStatus, SendMode, LogEntry, StatCard, LogItem, SectionHeader, SwitchRow } from "./components/common.slint";
 
 // ===== Main Application Window =====
 export component AppWindow inherits Window {
@@ -465,611 +307,104 @@ export component AppWindow inherits Window {
             vertical-stretch: 1;
 
             // ===== Left Panel - Configuration =====
-            ScrollView {
+            ConfigPanel {
                 width: 48%;
 
-                VerticalLayout {
-                    spacing: 12px;
-                    padding-right: 8px;
-
-                    // SMTP Server Section
-                    OutlinedCard {
-                        VerticalLayout {
-                            padding: 20px;
-                            spacing: 12px;
-
-                            SectionHeader { title: tr-smtp-server; }
-
-                            // Server Address
-                            HorizontalLayout {
-                                spacing: 8px;
-
-                                Text {
-                                    text: tr-server-address;
-                                    width: 60px;
-                                    font-size: 13px;
-                                    color: MaterialPalette.on_surface_variant;
-                                    vertical-alignment: center;
-                                }
-
-                                LineEdit {
-                                    text <=> smtp-server;
-                                    placeholder-text: "smtp.example.com";
-                                    horizontal-stretch: 1;
-                                }
-                            }
-
-                            // Port
-                            HorizontalLayout {
-                                spacing: 8px;
-                                alignment: start;
-
-                                Text {
-                                    text: tr-port;
-                                    width: 60px;
-                                    font-size: 13px;
-                                    color: MaterialPalette.on_surface_variant;
-                                    vertical-alignment: center;
-                                }
-
-                                LineEdit {
-                                    text <=> smtp-port-str;
-                                    width: 60px;
-                                }
-
-                                Button { text: "25"; clicked => { smtp-port-str = "25"; } }
-                                Button { text: "465"; clicked => { smtp-port-str = "465"; use-tls = true; } }
-                                Button { text: "587"; clicked => { smtp-port-str = "587"; } }
-                            }
-
-                            // TLS Options
-                            HorizontalLayout {
-                                spacing: 16px;
-                                alignment: start;
-
-                                SwitchRow { label: tr-use-tls; checked <=> use-tls; }
-                                SwitchRow { label: tr-accept-invalid-certs; checked <=> accept-invalid-certs; }
-                            }
-
-                            // Auth
-                            SwitchRow { label: tr-auth-required; checked <=> auth-mode; }
-
-                            if auth-mode: HorizontalLayout {
-                                spacing: 8px;
-
-                                Text {
-                                    text: tr-username;
-                                    width: 60px;
-                                    font-size: 13px;
-                                    color: MaterialPalette.on_surface_variant;
-                                    vertical-alignment: center;
-                                }
-
-                                LineEdit {
-                                    text <=> username;
-                                    horizontal-stretch: 1;
-                                }
-
-                                Text {
-                                    text: tr-password;
-                                    width: 60px;
-                                    font-size: 13px;
-                                    color: MaterialPalette.on_surface_variant;
-                                    vertical-alignment: center;
-                                }
-
-                                LineEdit {
-                                    text <=> password;
-                                    horizontal-stretch: 1;
-                                }
-                            }
-
-                            // Sender
-                            HorizontalLayout {
-                                spacing: 8px;
-
-                                Text {
-                                    text: tr-sender;
-                                    width: 60px;
-                                    font-size: 13px;
-                                    color: MaterialPalette.on_surface_variant;
-                                    vertical-alignment: center;
-                                }
-
-                                LineEdit {
-                                    text <=> from-address;
-                                    placeholder-text: "sender@example.com";
-                                    horizontal-stretch: 1;
-                                }
-                            }
-
-                            // Recipient
-                            HorizontalLayout {
-                                spacing: 8px;
-
-                                Text {
-                                    text: tr-recipient;
-                                    width: 60px;
-                                    font-size: 13px;
-                                    color: MaterialPalette.on_surface_variant;
-                                    vertical-alignment: center;
-                                }
-
-                                LineEdit {
-                                    text <=> to-address;
-                                    placeholder-text: tr-recipient-hint;
-                                    horizontal-stretch: 1;
-                                }
-                            }
-                        }
-                    }
-
-                    // Send Mode Section
-                    OutlinedCard {
-                        VerticalLayout {
-                            padding: 20px;
-                            spacing: 12px;
-
-                            SectionHeader { title: tr-send-mode; }
-
-                            // Mode Selection
-                            SegmentedButton {
-                                items: [
-                                    { text: tr-eml-batch },
-                                    { text: tr-single-attachment },
-                                    { text: tr-dir-attachment },
-                                ];
-                                current-index: send-mode == SendMode.EmlBatch ? 0 :
-                                              (send-mode == SendMode.SingleAttachment ? 1 : 2);
-                                index-changed(idx) => {
-                                    if idx == 0 {
-                                        send-mode = SendMode.EmlBatch;
-                                    } else if idx == 1 {
-                                        send-mode = SendMode.SingleAttachment;
-                                    } else {
-                                        send-mode = SendMode.DirAttachment;
-                                    }
-                                }
-                            }
-
-                            // EML Mode Options
-                            if send-mode == SendMode.EmlBatch: VerticalLayout {
-                                spacing: 8px;
-
-                                HorizontalLayout {
-                                    spacing: 8px;
-
-                                    Text {
-                                        text: tr-eml-directory;
-                                        width: 60px;
-                                        font-size: 13px;
-                                        color: MaterialPalette.on_surface_variant;
-                                        vertical-alignment: center;
-                                    }
-
-                                    LineEdit {
-                                        text <=> eml-dir;
-                                        horizontal-stretch: 1;
-                                    }
-
-                                    Button { text: tr-browse; clicked => { browse-eml-dir(); } }
-                                }
-
-                                HorizontalLayout {
-                                    spacing: 8px;
-                                    alignment: start;
-
-                                    Text {
-                                        text: tr-extension;
-                                        width: 60px;
-                                        font-size: 13px;
-                                        color: MaterialPalette.on_surface_variant;
-                                        vertical-alignment: center;
-                                    }
-
-                                    LineEdit {
-                                        text <=> eml-extension;
-                                        width: 80px;
-                                    }
-
-                                    if eml-file-count > 0: Rectangle {
-                                        background: AppTheme.dark-mode ? #3A3A3C : #E5E5EA;
-                                        border-radius: 10px;
-                                        height: 22px;
-                                        width: 90px;
-
-                                        Text {
-                                            text: "Found: " + eml-file-count;
-                                            font-size: 11px;
-                                            font-weight: 600;
-                                            color: AppTheme.dark-mode ? #FFFFFF : #1C1C1E;
-                                            horizontal-alignment: center;
-                                            vertical-alignment: center;
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Single Attachment Mode
-                            if send-mode == SendMode.SingleAttachment: VerticalLayout {
-                                spacing: 8px;
-
-                                HorizontalLayout {
-                                    spacing: 8px;
-
-                                    Text {
-                                        text: tr-attachment-file;
-                                        width: 60px;
-                                        font-size: 13px;
-                                        color: MaterialPalette.on_surface_variant;
-                                        vertical-alignment: center;
-                                    }
-
-                                    LineEdit {
-                                        text <=> attachment-path;
-                                        horizontal-stretch: 1;
-                                    }
-
-                                    Button { text: tr-browse; clicked => { browse-attachment(); } }
-                                }
-
-                                HorizontalLayout {
-                                    spacing: 8px;
-
-                                    Text {
-                                        text: tr-email-subject;
-                                        width: 60px;
-                                        font-size: 13px;
-                                        color: MaterialPalette.on_surface_variant;
-                                        vertical-alignment: center;
-                                    }
-
-                                    LineEdit {
-                                        text <=> subject-template;
-                                        horizontal-stretch: 1;
-                                    }
-                                }
-
-                                HorizontalLayout {
-                                    spacing: 8px;
-
-                                    Text {
-                                        text: tr-email-body;
-                                        width: 60px;
-                                        font-size: 13px;
-                                        color: MaterialPalette.on_surface_variant;
-                                        vertical-alignment: center;
-                                    }
-
-                                    LineEdit {
-                                        text <=> text-template;
-                                        horizontal-stretch: 1;
-                                    }
-                                }
-                            }
-
-                            // Directory Attachment Mode
-                            if send-mode == SendMode.DirAttachment: VerticalLayout {
-                                spacing: 8px;
-
-                                HorizontalLayout {
-                                    spacing: 8px;
-
-                                    Text {
-                                        text: tr-attachment-directory;
-                                        width: 60px;
-                                        font-size: 13px;
-                                        color: MaterialPalette.on_surface_variant;
-                                        vertical-alignment: center;
-                                    }
-
-                                    LineEdit {
-                                        text <=> attachment-dir;
-                                        horizontal-stretch: 1;
-                                    }
-
-                                    Button { text: tr-browse; clicked => { browse-attachment-dir(); } }
-                                }
-
-                                if attachment-file-count > 0: HorizontalLayout {
-                                    alignment: start;
-
-                                    Rectangle {
-                                        background: MaterialPalette.tertiary_container;
-                                        border-radius: 10px;
-                                        height: 20px;
-                                        width: 80px;
-
-                                        Text {
-                                            text: "Found: " + attachment-file-count;
-                                            font-size: 11px;
-                                            color: MaterialPalette.on_tertiary_container;
-                                            horizontal-alignment: center;
-                                            vertical-alignment: center;
-                                        }
-                                    }
-                                }
-
-                                HorizontalLayout {
-                                    spacing: 8px;
-
-                                    Text {
-                                        text: tr-email-subject;
-                                        width: 60px;
-                                        font-size: 13px;
-                                        color: MaterialPalette.on_surface_variant;
-                                        vertical-alignment: center;
-                                    }
-
-                                    LineEdit {
-                                        text <=> subject-template;
-                                        horizontal-stretch: 1;
-                                    }
-                                }
-
-                                HorizontalLayout {
-                                    spacing: 8px;
-
-                                    Text {
-                                        text: tr-email-body;
-                                        width: 60px;
-                                        font-size: 13px;
-                                        color: MaterialPalette.on_surface_variant;
-                                        vertical-alignment: center;
-                                    }
-
-                                    LineEdit {
-                                        text <=> text-template;
-                                        horizontal-stretch: 1;
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Advanced Options Section
-                    OutlinedCard {
-                        VerticalLayout {
-                            padding: 20px;
-                            spacing: 12px;
-
-                            SectionHeader { title: tr-advanced-options; }
-
-                            // Performance row
-                            HorizontalLayout {
-                                spacing: 12px;
-                                alignment: start;
-
-                                HorizontalLayout {
-                                    spacing: 4px;
-                                    Text {
-                                        text: tr-processes;
-                                        font-size: 12px;
-                                        color: MaterialPalette.on_surface_variant;
-                                        vertical-alignment: center;
-                                    }
-                                    LineEdit { text <=> processes; width: 50px; }
-                                }
-
-                                HorizontalLayout {
-                                    spacing: 4px;
-                                    Text {
-                                        text: tr-batch-size;
-                                        font-size: 12px;
-                                        color: MaterialPalette.on_surface_variant;
-                                        vertical-alignment: center;
-                                    }
-                                    LineEdit { text <=> batch-size-str; width: 50px; }
-                                }
-
-                                HorizontalLayout {
-                                    spacing: 4px;
-                                    Text {
-                                        text: tr-timeout;
-                                        font-size: 12px;
-                                        color: MaterialPalette.on_surface_variant;
-                                        vertical-alignment: center;
-                                    }
-                                    LineEdit { text <=> smtp-timeout-str; width: 50px; }
-                                }
-                            }
-
-                            // Loop settings
-                            HorizontalLayout {
-                                spacing: 12px;
-                                alignment: start;
-
-                                SwitchRow { label: tr-infinite-loop; checked <=> loop-mode; }
-
-                                HorizontalLayout {
-                                    spacing: 4px;
-                                    Text {
-                                        text: tr-repeat-count;
-                                        font-size: 12px;
-                                        color: MaterialPalette.on_surface_variant;
-                                        vertical-alignment: center;
-                                    }
-                                    LineEdit {
-                                        text <=> repeat-count-str;
-                                        width: 50px;
-                                        enabled: !loop-mode;
-                                    }
-                                }
-                            }
-
-                            // EML specific options
-                            if send-mode == SendMode.EmlBatch: HorizontalLayout {
-                                spacing: 12px;
-                                alignment: start;
-
-                                SwitchRow { label: tr-keep-headers; checked <=> keep-headers; }
-                                SwitchRow { label: tr-modify-headers; checked <=> modify-headers; }
-                                SwitchRow { label: tr-envelope-cc-bcc; checked <=> envelope-cc-bcc; }
-                                SwitchRow { label: tr-anonymize-emails; checked <=> anonymize-emails; }
-                            }
-
-                            // Log level
-                            HorizontalLayout {
-                                spacing: 8px;
-                                alignment: start;
-
-                                Text {
-                                    text: tr-log-level;
-                                    font-size: 12px;
-                                    color: MaterialPalette.on_surface_variant;
-                                    vertical-alignment: center;
-                                }
-
-                                ComboBox {
-                                    model: ["error", "warn", "info", "debug", "trace"];
-                                    current-index: 2;
-                                    width: 80px;
-                                    selected(s) => { log-level = s; }
-                                }
-                            }
-                        }
-                    }
-                }
+                tr-smtp-server: root.tr-smtp-server;
+                tr-server-address: root.tr-server-address;
+                tr-port: root.tr-port;
+                tr-use-tls: root.tr-use-tls;
+                tr-accept-invalid-certs: root.tr-accept-invalid-certs;
+                tr-auth-required: root.tr-auth-required;
+                tr-username: root.tr-username;
+                tr-password: root.tr-password;
+                tr-sender: root.tr-sender;
+                tr-recipient: root.tr-recipient;
+                tr-recipient-hint: root.tr-recipient-hint;
+                tr-send-mode: root.tr-send-mode;
+                tr-eml-batch: root.tr-eml-batch;
+                tr-single-attachment: root.tr-single-attachment;
+                tr-dir-attachment: root.tr-dir-attachment;
+                tr-eml-directory: root.tr-eml-directory;
+                tr-attachment-file: root.tr-attachment-file;
+                tr-attachment-directory: root.tr-attachment-directory;
+                tr-extension: root.tr-extension;
+                tr-browse: root.tr-browse;
+                tr-email-subject: root.tr-email-subject;
+                tr-email-body: root.tr-email-body;
+                tr-filename-hint: root.tr-filename-hint;
+                tr-advanced-options: root.tr-advanced-options;
+                tr-processes: root.tr-processes;
+                tr-batch-size: root.tr-batch-size;
+                tr-timeout: root.tr-timeout;
+                tr-infinite-loop: root.tr-infinite-loop;
+                tr-repeat-count: root.tr-repeat-count;
+                tr-keep-headers: root.tr-keep-headers;
+                tr-modify-headers: root.tr-modify-headers;
+                tr-envelope-cc-bcc: root.tr-envelope-cc-bcc;
+                tr-anonymize-emails: root.tr-anonymize-emails;
+                tr-log-level: root.tr-log-level;
+
+                smtp-server <=> root.smtp-server;
+                smtp-port-str <=> root.smtp-port-str;
+                use-tls <=> root.use-tls;
+                accept-invalid-certs <=> root.accept-invalid-certs;
+                auth-mode <=> root.auth-mode;
+                username <=> root.username;
+                password <=> root.password;
+                from-address <=> root.from-address;
+                to-address <=> root.to-address;
+                
+                send-mode <=> root.send-mode;
+                eml-dir <=> root.eml-dir;
+                eml-extension <=> root.eml-extension;
+                eml-file-count <=> root.eml-file-count;
+                attachment-path <=> root.attachment-path;
+                attachment-dir <=> root.attachment-dir;
+                attachment-file-count <=> root.attachment-file-count;
+                subject-template <=> root.subject-template;
+                text-template <=> root.text-template;
+
+                processes <=> root.processes;
+                batch-size-str <=> root.batch-size-str;
+                smtp-timeout-str <=> root.smtp-timeout-str;
+                loop-mode <=> root.loop-mode;
+                repeat-count-str <=> root.repeat-count-str;
+                keep-headers <=> root.keep-headers;
+                modify-headers <=> root.modify-headers;
+                envelope-cc-bcc <=> root.envelope-cc-bcc;
+                anonymize-emails <=> root.anonymize-emails;
+                log-level <=> root.log-level;
+
+                browse-eml-dir => { root.browse-eml-dir(); }
+                browse-attachment => { root.browse-attachment(); }
+                browse-attachment-dir => { root.browse-attachment-dir(); }
             }
 
             // ===== Right Panel - Monitoring =====
-            VerticalLayout {
-                horizontal-stretch: 1;
-                spacing: 12px;
+            MonitoringPanel {
+                tr-statistics: root.tr-statistics;
+                tr-total: root.tr-total;
+                tr-success: root.tr-success;
+                tr-failed: root.tr-failed;
+                tr-current-round: root.tr-current-round;
+                tr-elapsed-time: root.tr-elapsed-time;
+                tr-send-log: root.tr-send-log;
+                tr-clear: root.tr-clear;
+                tr-export-log: root.tr-export-log;
 
-                // Statistics
-                OutlinedCard {
-                    VerticalLayout {
-                        padding: 20px;
-                        spacing: 16px;
+                total-count <=> root.total-count;
+                sent-count <=> root.sent-count;
+                success-count <=> root.success-count;
+                fail-count <=> root.fail-count;
+                qps <=> root.qps;
+                elapsed-time <=> root.elapsed-time;
+                current-round <=> root.current-round;
+                total-rounds <=> root.total-rounds;
+                logs <=> root.logs;
 
-                        SectionHeader { title: tr-statistics; }
-
-                        // Stats Grid
-                        HorizontalLayout {
-                            spacing: 8px;
-
-                            StatCard {
-                                horizontal-stretch: 1;
-                                label: tr-total;
-                                value: total-count;
-                                accent-color: MaterialPalette.primary;
-                            }
-
-                            StatCard {
-                                horizontal-stretch: 1;
-                                label: tr-success;
-                                value: success-count;
-                                accent-color: MaterialPalette.tertiary;
-                            }
-
-                            StatCard {
-                                horizontal-stretch: 1;
-                                label: tr-failed;
-                                value: fail-count;
-                                accent-color: MaterialPalette.error;
-                            }
-
-                            StatCard {
-                                horizontal-stretch: 1;
-                                label: "QPS";
-                                value: round(qps * 10) / 10;
-                                accent-color: MaterialPalette.secondary;
-                            }
-                        }
-
-                        // Progress
-                        Rectangle {
-                            height: 6px;
-                            border-radius: 3px;
-                            background: MaterialPalette.surface_container_highest;
-
-                            Rectangle {
-                                width: parent.width * (total-count > 0 ? (sent-count / total-count) : 0);
-                                height: parent.height;
-                                border-radius: 3px;
-                                background: MaterialPalette.primary;
-
-                                animate width { duration: 300ms; easing: ease-out; }
-                            }
-                        }
-
-                        // Round/Time info
-                        HorizontalLayout {
-                            spacing: 16px;
-                            alignment: start;
-
-                            HorizontalLayout {
-                                spacing: 4px;
-                                Text {
-                                    text: tr-current-round + ":";
-                                    font-size: 12px;
-                                    color: MaterialPalette.on_surface_variant;
-                                    vertical-alignment: center;
-                                }
-                                Text {
-                                    text: current-round + "/" + total-rounds;
-                                    font-size: 12px;
-                                    font-weight: 600;
-                                    color: MaterialPalette.on_surface;
-                                    vertical-alignment: center;
-                                }
-                            }
-
-                            HorizontalLayout {
-                                spacing: 4px;
-                                Text {
-                                    text: tr-elapsed-time + ":";
-                                    font-size: 12px;
-                                    color: MaterialPalette.on_surface_variant;
-                                    vertical-alignment: center;
-                                }
-                                Text {
-                                    text: elapsed-time;
-                                    font-size: 12px;
-                                    font-weight: 600;
-                                    color: MaterialPalette.on_surface;
-                                    vertical-alignment: center;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Logs
-                OutlinedCard {
-                    vertical-stretch: 1;
-
-                    VerticalLayout {
-                        padding: 20px;
-                        spacing: 12px;
-
-                        SectionHeader { title: tr-send-log; }
-
-                        ScrollView {
-                            vertical-stretch: 1;
-
-                            VerticalLayout {
-                                spacing: 4px;
-                                alignment: start;
-
-                                for entry in logs: LogItem {
-                                    timestamp: entry.timestamp;
-                                    level: entry.level;
-                                    message: entry.message;
-                                }
-                            }
-                        }
-
-                        HorizontalLayout {
-                            spacing: 8px;
-                            alignment: start;
-
-                            Button { text: tr-clear; clicked => { clear-logs(); } }
-                            Button { text: tr-export-log; clicked => { export-logs(); } }
-                        }
-                    }
-                }
+                clear-logs => { root.clear-logs(); }
+                export-logs => { root.export-logs(); }
             }
         }
 

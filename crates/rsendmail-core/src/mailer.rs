@@ -1,9 +1,9 @@
 use anyhow::Result;
 use log::{error, info, warn};
 use mail_parser::{MessageParser, MimeHeaders};
-use rsendmail_i18n::{tr, tr_with_args};
 use mail_send::smtp::message::Parameters;
 use mail_send::{SmtpClient, SmtpClientBuilder};
+use rsendmail_i18n::{tr, tr_with_args};
 use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -62,14 +62,13 @@ fn extract_all_recipients(message: &mail_parser::Message, include_cc_bcc: bool) 
 
 /// 从 config.to 解析全局收件人列表，并过滤空字符串
 fn parse_global_recipients(config: &Config) -> Option<Vec<String>> {
-    config.to.as_ref()
-        .filter(|s| !s.is_empty())
-        .map(|to_str| {
-            to_str.split(',')
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-                .collect()
-        })
+    config.to.as_ref().filter(|s| !s.is_empty()).map(|to_str| {
+        to_str
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
+    })
 }
 
 /// 检测是否为需要重置连接的SMTP错误（基于原始错误字符串）
@@ -155,7 +154,10 @@ impl Mailer {
                         "{}",
                         tr_with_args(
                             "core.mailer.saved_failed_email",
-                            &[("source", source_path), ("dest", &dest_path.display().to_string())]
+                            &[
+                                ("source", source_path),
+                                ("dest", &dest_path.display().to_string())
+                            ]
                         )
                     );
                 }
@@ -180,7 +182,10 @@ impl Mailer {
         if let Some(attachment_dir) = &self.config.attachment_dir {
             info!(
                 "{}",
-                tr_with_args("core.mailer.detecting_attachment_dir", &[("dir", attachment_dir.as_str())])
+                tr_with_args(
+                    "core.mailer.detecting_attachment_dir",
+                    &[("dir", attachment_dir.as_str())]
+                )
             );
             return self
                 .send_attachment_dir_with_cancel(attachment_dir, running)
@@ -190,7 +195,10 @@ impl Mailer {
         if let Some(attachment_path) = &self.config.attachment {
             info!(
                 "{}",
-                tr_with_args("core.mailer.detecting_attachment", &[("path", attachment_path.as_str())])
+                tr_with_args(
+                    "core.mailer.detecting_attachment",
+                    &[("path", attachment_path.as_str())]
+                )
             );
             return self
                 .send_attachment_with_cancel(attachment_path, running)
@@ -205,7 +213,10 @@ impl Mailer {
                 let num_processes = num_cpus::get();
                 info!(
                     "{}",
-                    tr_with_args("core.mailer.auto_process_count", &[("count", &num_processes.to_string())])
+                    tr_with_args(
+                        "core.mailer.auto_process_count",
+                        &[("count", &num_processes.to_string())]
+                    )
                 );
                 self.send_fixed_mode_with_cancel(files, num_processes, &mut stats, running)
                     .await?;
@@ -213,7 +224,10 @@ impl Mailer {
             crate::config::ProcessMode::Fixed(n) => {
                 info!(
                     "{}",
-                    tr_with_args("core.mailer.using_process_count", &[("count", &n.to_string())])
+                    tr_with_args(
+                        "core.mailer.using_process_count",
+                        &[("count", &n.to_string())]
+                    )
                 );
                 self.send_fixed_mode_with_cancel(files, n, &mut stats, running)
                     .await?;
@@ -230,14 +244,20 @@ impl Mailer {
     ) -> Result<Stats> {
         info!(
             "{}",
-            tr_with_args("core.mailer.preparing_attachment_dir", &[("dir", attachment_dir)])
+            tr_with_args(
+                "core.mailer.preparing_attachment_dir",
+                &[("dir", attachment_dir)]
+            )
         );
         let mut stats = Stats::new();
         let start = Instant::now();
 
         let dir_path = Path::new(attachment_dir);
         if !dir_path.exists() || !dir_path.is_dir() {
-            let msg = tr_with_args("core.mailer.attachment_dir_not_exist", &[("dir", attachment_dir)]);
+            let msg = tr_with_args(
+                "core.mailer.attachment_dir_not_exist",
+                &[("dir", attachment_dir)],
+            );
             error!("{}", msg);
             return Err(anyhow::anyhow!("{}", msg));
         }
@@ -259,7 +279,10 @@ impl Mailer {
         }
         info!(
             "{}",
-            tr_with_args("core.mailer.found_files", &[("count", &files.len().to_string())])
+            tr_with_args(
+                "core.mailer.found_files",
+                &[("count", &files.len().to_string())]
+            )
         );
 
         if files.is_empty() {
@@ -272,16 +295,23 @@ impl Mailer {
             "{}",
             tr_with_args(
                 "core.mailer.connecting_smtp",
-                &[("server", &self.config.smtp_server), ("port", &self.config.port.to_string())]
+                &[
+                    ("server", &self.config.smtp_server),
+                    ("port", &self.config.port.to_string())
+                ]
             )
         );
 
         let use_tls = self.config.use_tls || self.config.port == 465;
 
         if self.config.auth_mode {
-            if let (Some(username), Some(password)) = (&self.config.username, &self.config.password) {
+            if let (Some(username), Some(password)) = (&self.config.username, &self.config.password)
+            {
                 if use_tls {
-                    info!("{}", tr_with_args("core.mailer.using_tls", &[("mode", "auth")]));
+                    info!(
+                        "{}",
+                        tr_with_args("core.mailer.using_tls", &[("mode", "auth")])
+                    );
                     let mut client_builder =
                         SmtpClientBuilder::new(self.config.smtp_server.as_str(), self.config.port)
                             .credentials((username.as_str(), password.as_str()));
@@ -293,13 +323,27 @@ impl Mailer {
                     if self.config.accept_invalid_certs {
                         client_builder = client_builder.allow_invalid_certs();
                     }
-                    match timeout(Duration::from_secs(self.config.smtp_timeout), client_builder.connect()).await {
+                    match timeout(
+                        Duration::from_secs(self.config.smtp_timeout),
+                        client_builder.connect(),
+                    )
+                    .await
+                    {
                         Ok(Ok(mut client)) => {
-                            self.send_attachment_dir_files(&files, &mut client, &mut stats, running).await;
+                            self.send_attachment_dir_files(
+                                &files,
+                                &mut client,
+                                &mut stats,
+                                running,
+                            )
+                            .await;
                             let _ = client.quit().await;
                         }
                         Ok(Err(e)) => {
-                            let msg = tr_with_args("core.mailer.smtp_auth_connect_failed", &[("error", &e.to_string())]);
+                            let msg = tr_with_args(
+                                "core.mailer.smtp_auth_connect_failed",
+                                &[("error", &e.to_string())],
+                            );
                             error!("{}", msg);
                             stats.increment_error(&msg, attachment_dir);
                         }
@@ -320,7 +364,10 @@ impl Mailer {
                 stats.increment_error(&msg, attachment_dir);
             }
         } else if use_tls {
-            info!("{}", tr_with_args("core.mailer.using_tls", &[("mode", "non-auth")]));
+            info!(
+                "{}",
+                tr_with_args("core.mailer.using_tls", &[("mode", "non-auth")])
+            );
             let mut client_builder =
                 SmtpClientBuilder::new(self.config.smtp_server.as_str(), self.config.port);
             client_builder = if self.config.port == 465 {
@@ -331,38 +378,63 @@ impl Mailer {
             if self.config.accept_invalid_certs {
                 client_builder = client_builder.allow_invalid_certs();
             }
-            match timeout(Duration::from_secs(self.config.smtp_timeout), client_builder.connect()).await {
+            match timeout(
+                Duration::from_secs(self.config.smtp_timeout),
+                client_builder.connect(),
+            )
+            .await
+            {
                 Ok(Ok(mut client)) => {
-                    self.send_attachment_dir_files(&files, &mut client, &mut stats, running).await;
+                    self.send_attachment_dir_files(&files, &mut client, &mut stats, running)
+                        .await;
                     let _ = client.quit().await;
                 }
                 Ok(Err(e)) => {
-                    let msg = tr_with_args("core.mailer.smtp_connect_failed_mode", &[("mode", "non-auth TLS"), ("error", &e.to_string())]);
+                    let msg = tr_with_args(
+                        "core.mailer.smtp_connect_failed_mode",
+                        &[("mode", "non-auth TLS"), ("error", &e.to_string())],
+                    );
                     error!("{}", msg);
                     stats.increment_error(&msg, attachment_dir);
                 }
                 Err(_) => {
-                    let msg = tr_with_args("core.mailer.smtp_timeout_mode", &[("mode", "non-auth TLS")]);
+                    let msg =
+                        tr_with_args("core.mailer.smtp_timeout_mode", &[("mode", "non-auth TLS")]);
                     error!("{}", msg);
                     stats.increment_error(&msg, attachment_dir);
                 }
             }
         } else {
-            info!("{}", tr_with_args("core.mailer.using_plain", &[("mode", "non-auth")]));
+            info!(
+                "{}",
+                tr_with_args("core.mailer.using_plain", &[("mode", "non-auth")])
+            );
             let client_builder =
                 SmtpClientBuilder::new(self.config.smtp_server.as_str(), self.config.port);
-            match timeout(Duration::from_secs(self.config.smtp_timeout), client_builder.connect_plain()).await {
+            match timeout(
+                Duration::from_secs(self.config.smtp_timeout),
+                client_builder.connect_plain(),
+            )
+            .await
+            {
                 Ok(Ok(mut client)) => {
-                    self.send_attachment_dir_files(&files, &mut client, &mut stats, running).await;
+                    self.send_attachment_dir_files(&files, &mut client, &mut stats, running)
+                        .await;
                     let _ = client.quit().await;
                 }
                 Ok(Err(e)) => {
-                    let msg = tr_with_args("core.mailer.smtp_connect_failed_mode", &[("mode", "attachment_dir"), ("error", &e.to_string())]);
+                    let msg = tr_with_args(
+                        "core.mailer.smtp_connect_failed_mode",
+                        &[("mode", "attachment_dir"), ("error", &e.to_string())],
+                    );
                     error!("{}", msg);
                     stats.increment_error(&msg, attachment_dir);
                 }
                 Err(_) => {
-                    let msg = tr_with_args("core.mailer.smtp_timeout_mode", &[("mode", "attachment_dir")]);
+                    let msg = tr_with_args(
+                        "core.mailer.smtp_timeout_mode",
+                        &[("mode", "attachment_dir")],
+                    );
                     error!("{}", msg);
                     stats.increment_error(&msg, attachment_dir);
                 }
@@ -407,17 +479,20 @@ impl Mailer {
             let from_addr = match self.config.from.as_deref() {
                 Some(addr) if !addr.is_empty() => addr,
                 _ => {
-                    let msg = tr_with_args("core.mailer.set_sender_failed", &[("error", "no sender address specified")]);
+                    let msg = tr_with_args(
+                        "core.mailer.set_sender_failed",
+                        &[("error", "no sender address specified")],
+                    );
                     error!("{}", msg);
                     stats.increment_error(&msg, file_path);
                     continue;
                 }
             };
-            if let Err(e) = client
-                .mail_from(from_addr, &empty_params)
-                .await
-            {
-                let msg = tr_with_args("core.mailer.set_sender_failed", &[("error", &e.to_string())]);
+            if let Err(e) = client.mail_from(from_addr, &empty_params).await {
+                let msg = tr_with_args(
+                    "core.mailer.set_sender_failed",
+                    &[("error", &e.to_string())],
+                );
                 error!("{}", msg);
                 stats.increment_error(&msg, file_path);
                 continue;
@@ -426,7 +501,8 @@ impl Mailer {
             let to_str = match self.config.to.as_deref() {
                 Some(s) if !s.is_empty() => s,
                 _ => {
-                    let msg = tr_with_args("core.mailer.all_recipients_failed", &[("path", file_path)]);
+                    let msg =
+                        tr_with_args("core.mailer.all_recipients_failed", &[("path", file_path)]);
                     error!("{}", msg);
                     stats.increment_error(&msg, file_path);
                     let _ = client.rset().await; // RSET after incomplete MAIL FROM transaction
@@ -442,7 +518,11 @@ impl Mailer {
             if recipients.is_empty() {
                 let msg = tr_with_args(
                     "core.mailer.set_recipient_failed_for",
-                    &[("recipient", to_str), ("path", file_path), ("error", "empty")]
+                    &[
+                        ("recipient", to_str),
+                        ("path", file_path),
+                        ("error", "empty"),
+                    ],
                 );
                 error!("{}", msg);
                 stats.increment_error(&tr("core.mailer.all_recipients_failed"), file_path);
@@ -455,7 +535,11 @@ impl Mailer {
                 if let Err(e) = client.rcpt_to(recipient, &empty_params).await {
                     let msg = tr_with_args(
                         "core.mailer.set_recipient_failed_for",
-                        &[("recipient", *recipient), ("path", file_path), ("error", &e.to_string())]
+                        &[
+                            ("recipient", *recipient),
+                            ("path", file_path),
+                            ("error", &e.to_string()),
+                        ],
                     );
                     error!("{}", msg);
                     stats.increment_error(&msg, file_path);
@@ -481,7 +565,10 @@ impl Mailer {
             let attachment_content = match tokio::fs::read(file_path).await {
                 Ok(content) => content,
                 Err(e) => {
-                    let msg = tr_with_args("core.mailer.read_attachment_failed", &[("error", &e.to_string())]);
+                    let msg = tr_with_args(
+                        "core.mailer.read_attachment_failed",
+                        &[("error", &e.to_string())],
+                    );
                     error!("{}", msg);
                     stats.increment_error(&msg, file_path);
                     continue;
@@ -505,7 +592,10 @@ impl Mailer {
             let mail_content = match builder.write_to_vec() {
                 Ok(content) => content,
                 Err(e) => {
-                    let msg = tr_with_args("core.mailer.build_email_failed", &[("error", &e.to_string())]);
+                    let msg = tr_with_args(
+                        "core.mailer.build_email_failed",
+                        &[("error", &e.to_string())],
+                    );
                     error!("{}", msg);
                     stats.increment_error(&msg, file_path);
                     continue;
@@ -521,7 +611,10 @@ impl Mailer {
                 Ok(Ok(_)) => {
                     info!(
                         "{}",
-                        tr_with_args("core.mailer.attachment_email_success", &[("file", &filename)])
+                        tr_with_args(
+                            "core.mailer.attachment_email_success",
+                            &[("file", &filename)]
+                        )
                     );
                     stats.email_count += 1;
                     stats.send_durations.push(send_start.elapsed());
@@ -529,13 +622,14 @@ impl Mailer {
                 Ok(Err(e)) => {
                     let msg = tr_with_args(
                         "core.mailer.email_send_failed_for",
-                        &[("path", file_path), ("error", &e.to_string())]
+                        &[("path", file_path), ("error", &e.to_string())],
                     );
                     error!("{}", msg);
                     stats.increment_error(&msg, file_path);
                 }
                 Err(_) => {
-                    let msg = tr_with_args("core.mailer.email_send_timeout_for", &[("path", file_path)]);
+                    let msg =
+                        tr_with_args("core.mailer.email_send_timeout_for", &[("path", file_path)]);
                     error!("{}", msg);
                     stats.increment_error(&tr("core.mailer.email_send_timeout"), file_path);
                 }
@@ -549,7 +643,10 @@ impl Mailer {
                     "{}",
                     tr_with_args(
                         "core.mailer.waiting_next_batch",
-                        &[("current", &(file_idx + 1).to_string()), ("total", &files.len().to_string())]
+                        &[
+                            ("current", &(file_idx + 1).to_string()),
+                            ("total", &files.len().to_string())
+                        ]
                     )
                 );
                 let sleep_duration =
@@ -598,20 +695,20 @@ impl Mailer {
             _ => {
                 let msg = tr_with_args(
                     "core.mailer.set_sender_failed_for",
-                    &[("path", attachment_path), ("error", "no sender address specified")]
+                    &[
+                        ("path", attachment_path),
+                        ("error", "no sender address specified"),
+                    ],
                 );
                 error!("{}", msg);
                 stats.increment_error(&msg, attachment_path);
                 return Ok(());
             }
         };
-        if let Err(e) = client
-            .mail_from(from_addr, &empty_params)
-            .await
-        {
+        if let Err(e) = client.mail_from(from_addr, &empty_params).await {
             let msg = tr_with_args(
                 "core.mailer.set_sender_failed_for",
-                &[("path", attachment_path), ("error", &e.to_string())]
+                &[("path", attachment_path), ("error", &e.to_string())],
             );
             error!("{}", msg);
             stats.increment_error(&msg, attachment_path);
@@ -623,7 +720,7 @@ impl Mailer {
             _ => {
                 let msg = tr_with_args(
                     "core.mailer.all_recipients_failed",
-                    &[("path", attachment_path)]
+                    &[("path", attachment_path)],
                 );
                 error!("{}", msg);
                 stats.increment_error(&msg, attachment_path);
@@ -639,7 +736,7 @@ impl Mailer {
         if recipients.is_empty() {
             let msg = tr_with_args(
                 "core.mailer.all_recipients_failed",
-                &[("path", attachment_path)]
+                &[("path", attachment_path)],
             );
             error!("{}", msg);
             stats.increment_error(&msg, attachment_path);
@@ -651,7 +748,11 @@ impl Mailer {
             if let Err(e) = client.rcpt_to(recipient, &empty_params).await {
                 let msg = tr_with_args(
                     "core.mailer.set_recipient_failed_for",
-                    &[("recipient", *recipient), ("path", attachment_path), ("error", &e.to_string())]
+                    &[
+                        ("recipient", *recipient),
+                        ("path", attachment_path),
+                        ("error", &e.to_string()),
+                    ],
                 );
                 error!("{}", msg);
                 stats.increment_error(&msg, attachment_path);
@@ -668,7 +769,10 @@ impl Mailer {
         }
 
         if !any_rcpt_succeeded {
-            let msg = tr_with_args("core.mailer.all_recipients_failed", &[("path", attachment_path)]);
+            let msg = tr_with_args(
+                "core.mailer.all_recipients_failed",
+                &[("path", attachment_path)],
+            );
             error!("{}", msg);
             // increment_error is already done per recipient
             return Ok(());
@@ -679,7 +783,7 @@ impl Mailer {
             Err(e) => {
                 let msg = tr_with_args(
                     "core.mailer.read_attachment_failed_for",
-                    &[("path", attachment_path), ("error", &e.to_string())]
+                    &[("path", attachment_path), ("error", &e.to_string())],
                 );
                 error!("{}", msg);
                 stats.increment_error(&msg, attachment_path);
@@ -708,7 +812,7 @@ impl Mailer {
             Err(e) => {
                 let msg = tr_with_args(
                     "core.mailer.build_email_failed_for",
-                    &[("path", attachment_path), ("error", &e.to_string())]
+                    &[("path", attachment_path), ("error", &e.to_string())],
                 );
                 error!("{}", msg);
                 stats.increment_error(&msg, attachment_path);
@@ -725,7 +829,10 @@ impl Mailer {
             Ok(Ok(_)) => {
                 info!(
                     "{}",
-                    tr_with_args("core.mailer.attachment_email_success_path", &[("path", attachment_path)])
+                    tr_with_args(
+                        "core.mailer.attachment_email_success_path",
+                        &[("path", attachment_path)]
+                    )
                 );
                 stats.email_count += 1;
                 stats.send_durations.push(send_start.elapsed());
@@ -733,13 +840,16 @@ impl Mailer {
             Ok(Err(e)) => {
                 let msg = tr_with_args(
                     "core.mailer.email_send_failed_for",
-                    &[("path", attachment_path), ("error", &e.to_string())]
+                    &[("path", attachment_path), ("error", &e.to_string())],
                 );
                 error!("{}", msg);
                 stats.increment_error(&msg, attachment_path);
             }
             Err(_) => {
-                let msg = tr_with_args("core.mailer.email_send_timeout_for", &[("path", attachment_path)]);
+                let msg = tr_with_args(
+                    "core.mailer.email_send_timeout_for",
+                    &[("path", attachment_path)],
+                );
                 error!("{}", msg);
                 stats.increment_error(&tr("core.mailer.email_send_timeout"), attachment_path);
             }
@@ -755,13 +865,19 @@ impl Mailer {
     ) -> Result<Stats> {
         info!(
             "{}",
-            tr_with_args("core.mailer.preparing_attachment", &[("path", attachment_path)])
+            tr_with_args(
+                "core.mailer.preparing_attachment",
+                &[("path", attachment_path)]
+            )
         );
         let mut stats = Stats::new();
         let start = Instant::now();
 
         if !Path::new(attachment_path).exists() {
-            let msg = tr_with_args("core.mailer.attachment_not_exist", &[("path", attachment_path)]);
+            let msg = tr_with_args(
+                "core.mailer.attachment_not_exist",
+                &[("path", attachment_path)],
+            );
             error!("{}", msg);
             stats.increment_error(&msg, attachment_path); // Record error in stats
             return Ok(stats); // Return stats with error instead of Err(anyhow!)
@@ -786,7 +902,10 @@ impl Mailer {
             "{}",
             tr_with_args(
                 "core.mailer.connecting_smtp",
-                &[("server", &self.config.smtp_server), ("port", &self.config.port.to_string())]
+                &[
+                    ("server", &self.config.smtp_server),
+                    ("port", &self.config.port.to_string())
+                ]
             )
         );
         let use_tls = self.config.use_tls || self.config.port == 465;
@@ -799,10 +918,16 @@ impl Mailer {
             {
                 info!(
                     "{}",
-                    tr_with_args("core.mailer.using_account_login", &[("username", username.as_str())])
+                    tr_with_args(
+                        "core.mailer.using_account_login",
+                        &[("username", username.as_str())]
+                    )
                 );
                 if use_tls {
-                    info!("{}", tr_with_args("core.mailer.using_tls", &[("mode", "auth")]));
+                    info!(
+                        "{}",
+                        tr_with_args("core.mailer.using_tls", &[("mode", "auth")])
+                    );
                     let mut client_builder =
                         SmtpClientBuilder::new(self.config.smtp_server.as_str(), self.config.port)
                             .credentials((username.as_str(), password.as_str()));
@@ -840,7 +965,10 @@ impl Mailer {
                             let _ = client.quit().await;
                         }
                         Ok(Err(e)) => {
-                            let msg = tr_with_args("core.mailer.smtp_auth_connect_failed", &[("error", &e.to_string())]);
+                            let msg = tr_with_args(
+                                "core.mailer.smtp_auth_connect_failed",
+                                &[("error", &e.to_string())],
+                            );
                             error!("{}", msg);
                             stats.increment_error(&msg, attachment_path);
                         }
@@ -865,7 +993,10 @@ impl Mailer {
             let mut client_builder =
                 SmtpClientBuilder::new(self.config.smtp_server.as_str(), self.config.port);
             if use_tls {
-                info!("{}", tr_with_args("core.mailer.using_tls", &[("mode", "non-auth")]));
+                info!(
+                    "{}",
+                    tr_with_args("core.mailer.using_tls", &[("mode", "non-auth")])
+                );
                 client_builder = if self.config.port == 465 {
                     client_builder.implicit_tls(true)
                 } else {
@@ -902,23 +1033,26 @@ impl Mailer {
                     Ok(Err(e)) => {
                         let msg = tr_with_args(
                             "core.mailer.smtp_connect_failed_mode",
-                            &[("mode", "non-auth TLS"), ("error", &e.to_string())]
+                            &[("mode", "non-auth TLS"), ("error", &e.to_string())],
                         );
                         error!("{}", msg);
-                        stats.increment_error(
-                            &msg,
-                            attachment_path,
-                        );
+                        stats.increment_error(&msg, attachment_path);
                     }
                     Err(_) => {
-                        let msg = tr_with_args("core.mailer.smtp_timeout_mode", &[("mode", "non-auth TLS")]);
+                        let msg = tr_with_args(
+                            "core.mailer.smtp_timeout_mode",
+                            &[("mode", "non-auth TLS")],
+                        );
                         error!("{}", msg);
                         stats.increment_error(&msg, attachment_path);
                     }
                 }
             } else {
                 // Plain connection
-                info!("{}", tr_with_args("core.mailer.using_plain", &[("mode", "non-auth")]));
+                info!(
+                    "{}",
+                    tr_with_args("core.mailer.using_plain", &[("mode", "non-auth")])
+                );
                 match timeout(
                     Duration::from_secs(self.config.smtp_timeout),
                     client_builder.connect_plain(),
@@ -947,13 +1081,16 @@ impl Mailer {
                     Ok(Err(e)) => {
                         let msg = tr_with_args(
                             "core.mailer.smtp_connect_failed_mode",
-                            &[("mode", "non-auth Plain"), ("error", &e.to_string())]
+                            &[("mode", "non-auth Plain"), ("error", &e.to_string())],
                         );
                         error!("{}", msg);
                         stats.increment_error(&msg, attachment_path);
                     }
                     Err(_) => {
-                        let msg = tr_with_args("core.mailer.smtp_timeout_mode", &[("mode", "non-auth Plain")]);
+                        let msg = tr_with_args(
+                            "core.mailer.smtp_timeout_mode",
+                            &[("mode", "non-auth Plain")],
+                        );
                         error!("{}", msg);
                         stats.increment_error(&msg, attachment_path);
                     }
@@ -1000,7 +1137,10 @@ impl Mailer {
                     if !running.load(Ordering::SeqCst) {
                         warn!(
                             "{}",
-                            tr_with_args("core.mailer.process_group_interrupted", &[("id", &(i + 1).to_string())])
+                            tr_with_args(
+                                "core.mailer.process_group_interrupted",
+                                &[("id", &(i + 1).to_string())]
+                            )
                         );
                         break;
                     }
@@ -1015,7 +1155,10 @@ impl Mailer {
                                 &[
                                     ("id", &(i + 1).to_string()),
                                     ("current", &(j / config.batch_size + 1).to_string()),
-                                    ("total", &chunk.len().div_ceil(config.batch_size).to_string()),
+                                    (
+                                        "total",
+                                        &chunk.len().div_ceil(config.batch_size).to_string()
+                                    ),
                                     ("file", &current_batch.len().to_string())
                                 ]
                             )
@@ -1059,10 +1202,22 @@ impl Mailer {
                                             )
                                             .await
                                             {
-                                                error!("{}", tr_with_args("core.mailer.process_group_tls_failed", &[("id", &(i + 1).to_string()), ("error", &e.to_string())]));
+                                                error!(
+                                                    "{}",
+                                                    tr_with_args(
+                                                        "core.mailer.process_group_tls_failed",
+                                                        &[
+                                                            ("id", &(i + 1).to_string()),
+                                                            ("error", &e.to_string())
+                                                        ]
+                                                    )
+                                                );
                                                 for file_path_in_batch in &current_batch {
                                                     group_stats.3.push((
-                                                        tr_with_args("core.mailer.error_tls_batch", &[("error", &e.to_string())]),
+                                                        tr_with_args(
+                                                            "core.mailer.error_tls_batch",
+                                                            &[("error", &e.to_string())],
+                                                        ),
                                                         file_path_in_batch.clone(),
                                                     ));
                                                 }
@@ -1070,7 +1225,16 @@ impl Mailer {
                                             let _ = client.quit().await;
                                         }
                                         Ok(Err(e)) => {
-                                            error!("{}", tr_with_args("core.mailer.process_group_auth_failed", &[("id", &(i + 1).to_string()), ("error", &e.to_string())]));
+                                            error!(
+                                                "{}",
+                                                tr_with_args(
+                                                    "core.mailer.process_group_auth_failed",
+                                                    &[
+                                                        ("id", &(i + 1).to_string()),
+                                                        ("error", &e.to_string())
+                                                    ]
+                                                )
+                                            );
                                             for file_path_in_batch in &current_batch {
                                                 group_stats.3.push((
                                                     tr("core.mailer.error_auth_connect_failed"),
@@ -1079,7 +1243,13 @@ impl Mailer {
                                             }
                                         }
                                         Err(_) => {
-                                            error!("{}", tr_with_args("core.mailer.process_group_auth_timeout", &[("id", &(i + 1).to_string())]));
+                                            error!(
+                                                "{}",
+                                                tr_with_args(
+                                                    "core.mailer.process_group_auth_timeout",
+                                                    &[("id", &(i + 1).to_string())]
+                                                )
+                                            );
                                             for file_path_in_batch in &current_batch {
                                                 group_stats.3.push((
                                                     tr("core.mailer.error_auth_connect_timeout"),
@@ -1089,7 +1259,13 @@ impl Mailer {
                                         }
                                     }
                                 } else {
-                                    error!("{}", tr_with_args("core.mailer.process_group_no_tls_auth", &[("id", &(i + 1).to_string())]));
+                                    error!(
+                                        "{}",
+                                        tr_with_args(
+                                            "core.mailer.process_group_no_tls_auth",
+                                            &[("id", &(i + 1).to_string())]
+                                        )
+                                    );
                                     for file_path_in_batch in &current_batch {
                                         group_stats.3.push((
                                             tr("core.mailer.error_auth_requires_tls"),
@@ -1098,7 +1274,13 @@ impl Mailer {
                                     }
                                 }
                             } else {
-                                error!("{}", tr_with_args("core.mailer.process_group_missing_auth", &[("id", &(i + 1).to_string())]));
+                                error!(
+                                    "{}",
+                                    tr_with_args(
+                                        "core.mailer.process_group_missing_auth",
+                                        &[("id", &(i + 1).to_string())]
+                                    )
+                                );
                                 for file_path_in_batch in &current_batch {
                                     group_stats.3.push((
                                         tr("core.mailer.error_auth_missing_credentials"),
@@ -1111,7 +1293,13 @@ impl Mailer {
                             if use_tls {
                                 // Non-auth + TLS: no client_opt reuse, new connection per batch
                                 client_opt = None;
-                                info!("{}", tr_with_args("core.mailer.process_group_using_tls", &[("id", &(i + 1).to_string())]));
+                                info!(
+                                    "{}",
+                                    tr_with_args(
+                                        "core.mailer.process_group_using_tls",
+                                        &[("id", &(i + 1).to_string())]
+                                    )
+                                );
                                 let mut client_builder = SmtpClientBuilder::new(
                                     config.smtp_server.as_str(),
                                     config.port,
@@ -1144,10 +1332,22 @@ impl Mailer {
                                         )
                                         .await
                                         {
-                                            error!("{}", tr_with_args("core.mailer.process_group_tls_failed", &[("id", &(i + 1).to_string()), ("error", &e.to_string())]));
+                                            error!(
+                                                "{}",
+                                                tr_with_args(
+                                                    "core.mailer.process_group_tls_failed",
+                                                    &[
+                                                        ("id", &(i + 1).to_string()),
+                                                        ("error", &e.to_string())
+                                                    ]
+                                                )
+                                            );
                                             for file_path_in_batch in &current_batch {
                                                 group_stats.3.push((
-                                                    tr_with_args("core.mailer.error_non_auth_tls_batch", &[("error", &e.to_string())]),
+                                                    tr_with_args(
+                                                        "core.mailer.error_non_auth_tls_batch",
+                                                        &[("error", &e.to_string())],
+                                                    ),
                                                     file_path_in_batch.clone(),
                                                 ));
                                             }
@@ -1155,7 +1355,16 @@ impl Mailer {
                                         let _ = client.quit().await;
                                     }
                                     Ok(Err(e)) => {
-                                        error!("{}", tr_with_args("core.mailer.process_group_non_auth_tls_failed", &[("id", &(i + 1).to_string()), ("error", &e.to_string())]));
+                                        error!(
+                                            "{}",
+                                            tr_with_args(
+                                                "core.mailer.process_group_non_auth_tls_failed",
+                                                &[
+                                                    ("id", &(i + 1).to_string()),
+                                                    ("error", &e.to_string())
+                                                ]
+                                            )
+                                        );
                                         for file_path_in_batch in &current_batch {
                                             group_stats.3.push((
                                                 tr("core.mailer.error_non_auth_tls_failed"),
@@ -1164,7 +1373,13 @@ impl Mailer {
                                         }
                                     }
                                     Err(_) => {
-                                        error!("{}", tr_with_args("core.mailer.process_group_non_auth_tls_timeout", &[("id", &(i + 1).to_string())]));
+                                        error!(
+                                            "{}",
+                                            tr_with_args(
+                                                "core.mailer.process_group_non_auth_tls_timeout",
+                                                &[("id", &(i + 1).to_string())]
+                                            )
+                                        );
                                         for file_path_in_batch in &current_batch {
                                             group_stats.3.push((
                                                 tr("core.mailer.error_non_auth_tls_timeout"),
@@ -1176,7 +1391,16 @@ impl Mailer {
                             } else {
                                 // Non-auth + Plain: use client_opt for potential reuse
                                 if client_opt.is_none() {
-                                    info!("{}", tr_with_args("core.mailer.process_group_using_plain", &[("id", &(i + 1).to_string()), ("batch", &config.batch_size.to_string())]));
+                                    info!(
+                                        "{}",
+                                        tr_with_args(
+                                            "core.mailer.process_group_using_plain",
+                                            &[
+                                                ("id", &(i + 1).to_string()),
+                                                ("batch", &config.batch_size.to_string())
+                                            ]
+                                        )
+                                    );
                                     let client_builder = SmtpClientBuilder::new(
                                         config.smtp_server.as_str(),
                                         config.port,
@@ -1198,7 +1422,13 @@ impl Mailer {
                                             }
                                         }
                                         Err(_) => {
-                                            error!("{}", tr_with_args("core.mailer.process_group_plain_timeout", &[("id", &(i + 1).to_string())]));
+                                            error!(
+                                                "{}",
+                                                tr_with_args(
+                                                    "core.mailer.process_group_plain_timeout",
+                                                    &[("id", &(i + 1).to_string())]
+                                                )
+                                            );
                                             for file_path_in_batch in &current_batch {
                                                 group_stats.3.push((
                                                     tr("core.mailer.error_plain_timeout"),
@@ -1229,18 +1459,36 @@ impl Mailer {
 
                                     // 使用函数返回的连接状态标志，立即响应SMTP协议要求
                                     if should_reset_connection {
-                                        warn!("{}", tr_with_args("core.mailer.process_group_connection_reset_needed", &[("id", &(i + 1).to_string())]));
+                                        warn!(
+                                            "{}",
+                                            tr_with_args(
+                                                "core.mailer.process_group_connection_reset_needed",
+                                                &[("id", &(i + 1).to_string())]
+                                            )
+                                        );
                                         // 立即重置连接，下个批次将重新建立
                                         client_opt = None;
                                     }
 
                                     // batch-size=1时强制关闭连接，避免连接重用
                                     if config.batch_size == 1 {
-                                        info!("{}", tr_with_args("core.mailer.process_group_batch_size_1_close", &[("id", &(i + 1).to_string())]));
+                                        info!(
+                                            "{}",
+                                            tr_with_args(
+                                                "core.mailer.process_group_batch_size_1_close",
+                                                &[("id", &(i + 1).to_string())]
+                                            )
+                                        );
                                         client_opt = None;
                                     }
                                 } else {
-                                    info!("{}", tr_with_args("core.mailer.process_group_smtp_unavailable", &[("id", &(i + 1).to_string())]));
+                                    info!(
+                                        "{}",
+                                        tr_with_args(
+                                            "core.mailer.process_group_smtp_unavailable",
+                                            &[("id", &(i + 1).to_string())]
+                                        )
+                                    );
                                 }
                             }
                         }
@@ -1249,7 +1497,18 @@ impl Mailer {
                             && j + 1 < chunk.len()
                             && running.load(Ordering::SeqCst)
                         {
-                            info!("{}", tr_with_args("core.mailer.process_group_batch_interval", &[("id", &(i + 1).to_string()), ("ms", &config.email_send_interval_ms.to_string()), ("current", &(j + 1).to_string()), ("total", &chunk.len().to_string())]));
+                            info!(
+                                "{}",
+                                tr_with_args(
+                                    "core.mailer.process_group_batch_interval",
+                                    &[
+                                        ("id", &(i + 1).to_string()),
+                                        ("ms", &config.email_send_interval_ms.to_string()),
+                                        ("current", &(j + 1).to_string()),
+                                        ("total", &chunk.len().to_string())
+                                    ]
+                                )
+                            );
                             let sleep_duration =
                                 std::time::Duration::from_millis(config.email_send_interval_ms);
                             let running_clone_for_sleep = running.clone();
@@ -1259,7 +1518,17 @@ impl Mailer {
                                 _ = tokio::time::sleep(sleep_duration) => {}
                             }
                             if !running.load(Ordering::SeqCst) {
-                                warn!("{}", tr_with_args("core.mailer.process_group_interval_interrupted", &[("id", &(i + 1).to_string()), ("current", &(j + 1).to_string()), ("total", &chunk.len().to_string())]));
+                                warn!(
+                                    "{}",
+                                    tr_with_args(
+                                        "core.mailer.process_group_interval_interrupted",
+                                        &[
+                                            ("id", &(i + 1).to_string()),
+                                            ("current", &(j + 1).to_string()),
+                                            ("total", &chunk.len().to_string())
+                                        ]
+                                    )
+                                );
                                 break;
                             }
                         }
@@ -1267,7 +1536,10 @@ impl Mailer {
                 }
                 info!(
                     "{}",
-                    tr_with_args("core.mailer.process_group_complete", &[("id", &(i + 1).to_string())])
+                    tr_with_args(
+                        "core.mailer.process_group_complete",
+                        &[("id", &(i + 1).to_string())]
+                    )
                 );
                 group_stats
             });
@@ -1301,7 +1573,10 @@ impl Mailer {
         };
         info!(
             "{}",
-            tr_with_args("core.mailer.scanning_eml_directory", &[("dir", dir.as_str())])
+            tr_with_args(
+                "core.mailer.scanning_eml_directory",
+                &[("dir", dir.as_str())]
+            )
         );
         for entry in WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
             if entry.file_type().is_file() {
@@ -1316,7 +1591,10 @@ impl Mailer {
         }
         info!(
             "{}",
-            tr_with_args("core.mailer.found_eml_files", &[("count", &files.len().to_string())])
+            tr_with_args(
+                "core.mailer.found_eml_files",
+                &[("count", &files.len().to_string())]
+            )
         );
         Ok(files)
     }
@@ -1354,15 +1632,30 @@ impl Mailer {
                 Ok(c) => {
                     current_file_parse_duration = Some(parse_start.elapsed());
                     if let Some(anonymizer_ref) = anonymizer.as_mut() {
-                        info!("{}", tr_with_args("core.mailer.anonymizing_email", &[("path", file_path.as_str())]));
+                        info!(
+                            "{}",
+                            tr_with_args(
+                                "core.mailer.anonymizing_email",
+                                &[("path", file_path.as_str())]
+                            )
+                        );
                         anonymizer_ref.anonymize_binary(&c)
                     } else {
                         c
                     }
                 }
                 Err(e) => {
-                    error!("{}", tr_with_args("core.mailer.read_file_failed", &[("path", file_path.as_str()), ("error", &e.to_string())]));
-                    failures.push((tr_with_args("core.mailer.error_read_file", &[("error", &e.to_string())]), file_path.to_string()));
+                    error!(
+                        "{}",
+                        tr_with_args(
+                            "core.mailer.read_file_failed",
+                            &[("path", file_path.as_str()), ("error", &e.to_string())]
+                        )
+                    );
+                    failures.push((
+                        tr_with_args("core.mailer.error_read_file", &[("error", &e.to_string())]),
+                        file_path.to_string(),
+                    ));
                     Self::save_failed_email(config, file_path);
                     had_error_this_email = true;
                     Vec::new() // dummy content
@@ -1375,7 +1668,13 @@ impl Mailer {
                 let message = match MessageParser::default().parse(&content) {
                     Some(msg) => msg,
                     None => {
-                        error!("{}", tr_with_args("core.mailer.parse_email_failed", &[("path", file_path.as_str())]));
+                        error!(
+                            "{}",
+                            tr_with_args(
+                                "core.mailer.parse_email_failed",
+                                &[("path", file_path.as_str())]
+                            )
+                        );
                         failures.push((tr("core.mailer.error_parse_email"), file_path.to_string()));
                         Self::save_failed_email(config, file_path);
                         had_error_this_email = true;
@@ -1390,17 +1689,32 @@ impl Mailer {
                     let mut email_send_op_failed = false;
 
                     // 确定发件人地址：优先使用CLI指定的--from，否则从EML提取
-                    let envelope_from = if let Some(ref from) = config.from.as_ref().filter(|s| !s.is_empty()) {
+                    let envelope_from = if let Some(ref from) =
+                        config.from.as_ref().filter(|s| !s.is_empty())
+                    {
                         from.to_string()
                     } else {
                         match extract_first_email(message.from()) {
                             Some(addr) => {
-                                info!("{}", tr_with_args("core.mailer.using_eml_from", &[("addr", addr.as_str()), ("path", file_path.as_str())]));
+                                info!(
+                                    "{}",
+                                    tr_with_args(
+                                        "core.mailer.using_eml_from",
+                                        &[("addr", addr.as_str()), ("path", file_path.as_str())]
+                                    )
+                                );
                                 addr
                             }
                             None => {
-                                error!("{}", tr_with_args("core.mailer.extract_from_failed", &[("path", file_path.as_str())]));
-                                failures.push((tr("core.mailer.error_no_from"), file_path.to_string()));
+                                error!(
+                                    "{}",
+                                    tr_with_args(
+                                        "core.mailer.extract_from_failed",
+                                        &[("path", file_path.as_str())]
+                                    )
+                                );
+                                failures
+                                    .push((tr("core.mailer.error_no_from"), file_path.to_string()));
                                 Self::save_failed_email(config, file_path);
                                 continue;
                             }
@@ -1408,20 +1722,43 @@ impl Mailer {
                     };
 
                     // 确定收件人地址：优先使用CLI指定的--to，否则从EML提取
-                    let current_recipients: Vec<String> = if let Some(ref recips) = global_recipients {
-                        recips.clone()
-                    } else {
-                        let eml_recipients = extract_all_recipients(&message, config.envelope_cc_bcc);
-                        if !eml_recipients.is_empty() {
-                            info!("{}", tr_with_args("core.mailer.using_eml_recipients", &[("addrs", &format!("{:?}", eml_recipients)), ("path", file_path.as_str())]));
-                        }
-                        eml_recipients
-                    };
+                    let current_recipients: Vec<String> =
+                        if let Some(ref recips) = global_recipients {
+                            recips.clone()
+                        } else {
+                            let eml_recipients =
+                                extract_all_recipients(&message, config.envelope_cc_bcc);
+                            if !eml_recipients.is_empty() {
+                                info!(
+                                    "{}",
+                                    tr_with_args(
+                                        "core.mailer.using_eml_recipients",
+                                        &[
+                                            ("addrs", &format!("{:?}", eml_recipients)),
+                                            ("path", file_path.as_str())
+                                        ]
+                                    )
+                                );
+                            }
+                            eml_recipients
+                        };
 
                     if current_recipients.is_empty() {
-                        error!("{}", tr_with_args("core.mailer.no_valid_recipients", &[("path", file_path.as_str()), ("to", config.to.as_deref().unwrap_or("<from EML>"))]));
+                        error!(
+                            "{}",
+                            tr_with_args(
+                                "core.mailer.no_valid_recipients",
+                                &[
+                                    ("path", file_path.as_str()),
+                                    ("to", config.to.as_deref().unwrap_or("<from EML>"))
+                                ]
+                            )
+                        );
                         failures.push((
-                            tr_with_args("core.mailer.error_no_recipients", &[("to", config.to.as_deref().unwrap_or("<from EML>"))]),
+                            tr_with_args(
+                                "core.mailer.error_no_recipients",
+                                &[("to", config.to.as_deref().unwrap_or("<from EML>"))],
+                            ),
                             file_path.to_string(),
                         ));
                         Self::save_failed_email(config, file_path);
@@ -1429,18 +1766,32 @@ impl Mailer {
                     }
 
                     if !email_send_op_failed {
-                        if let Err(e) = client.mail_from(&envelope_from, &empty_params).await
-                        {
+                        if let Err(e) = client.mail_from(&envelope_from, &empty_params).await {
                             let raw_error = e.to_string();
-                            error!("{}", tr_with_args("core.mailer.set_sender_failed_for", &[("path", file_path.as_str()), ("error", &raw_error)]));
-                            let error_msg = tr_with_args("core.mailer.error_set_sender", &[("error", &raw_error)]);
+                            error!(
+                                "{}",
+                                tr_with_args(
+                                    "core.mailer.set_sender_failed_for",
+                                    &[("path", file_path.as_str()), ("error", &raw_error)]
+                                )
+                            );
+                            let error_msg = tr_with_args(
+                                "core.mailer.error_set_sender",
+                                &[("error", &raw_error)],
+                            );
                             failures.push((error_msg.clone(), file_path.to_string()));
                             Self::save_failed_email(config, file_path);
                             email_send_op_failed = true;
 
                             // 检测关键SMTP错误（基于原始错误字符串，非翻译文本）
                             if is_connection_error(&raw_error) {
-                                warn!("{}", tr_with_args("core.mailer.connection_error_detected", &[("error", &raw_error)]));
+                                warn!(
+                                    "{}",
+                                    tr_with_args(
+                                        "core.mailer.connection_error_detected",
+                                        &[("error", &raw_error)]
+                                    )
+                                );
                                 connection_should_reset = true;
                                 break;
                             }
@@ -1450,19 +1801,51 @@ impl Mailer {
                     if !email_send_op_failed {
                         let mut any_rcpt_succeeded = false;
                         for recipient in &current_recipients {
-                            if let Err(e) = client.rcpt_to(recipient.as_str(), &empty_params).await {
-                                error!("{}", tr_with_args("core.mailer.set_recipient_failed_for", &[("recipient", recipient.as_str()), ("path", file_path.as_str()), ("error", &e.to_string())]));
+                            if let Err(e) = client.rcpt_to(recipient.as_str(), &empty_params).await
+                            {
+                                error!(
+                                    "{}",
+                                    tr_with_args(
+                                        "core.mailer.set_recipient_failed_for",
+                                        &[
+                                            ("recipient", recipient.as_str()),
+                                            ("path", file_path.as_str()),
+                                            ("error", &e.to_string())
+                                        ]
+                                    )
+                                );
                                 failures.push((
-                                    tr_with_args("core.mailer.error_set_recipient", &[("recipient", recipient.as_str()), ("error", &e.to_string())]),
+                                    tr_with_args(
+                                        "core.mailer.error_set_recipient",
+                                        &[
+                                            ("recipient", recipient.as_str()),
+                                            ("error", &e.to_string()),
+                                        ],
+                                    ),
                                     file_path.to_string(),
                                 ));
                             } else {
-                                info!("{}", tr_with_args("core.mailer.set_recipient_success", &[("recipient", recipient.as_str()), ("path", file_path.as_str())]));
+                                info!(
+                                    "{}",
+                                    tr_with_args(
+                                        "core.mailer.set_recipient_success",
+                                        &[
+                                            ("recipient", recipient.as_str()),
+                                            ("path", file_path.as_str())
+                                        ]
+                                    )
+                                );
                                 any_rcpt_succeeded = true;
                             }
                         }
                         if !any_rcpt_succeeded && !current_recipients.is_empty() {
-                            error!("{}", tr_with_args("core.mailer.all_recipients_failed", &[("path", file_path.as_str())]));
+                            error!(
+                                "{}",
+                                tr_with_args(
+                                    "core.mailer.all_recipients_failed",
+                                    &[("path", file_path.as_str())]
+                                )
+                            );
                             Self::save_failed_email(config, file_path);
                             email_send_op_failed = true;
                         }
@@ -1470,14 +1853,27 @@ impl Mailer {
 
                     if !email_send_op_failed {
                         let mail_data_to_send = if config.keep_headers {
-                            info!("{}", tr_with_args("core.mailer.using_original_headers", &[("path", file_path.as_str())]));
+                            info!(
+                                "{}",
+                                tr_with_args(
+                                    "core.mailer.using_original_headers",
+                                    &[("path", file_path.as_str())]
+                                )
+                            );
                             content.clone()
                         } else if config.modify_headers {
-                            info!("{}", tr_with_args("core.mailer.modifying_headers", &[("path", file_path.as_str())]));
+                            info!(
+                                "{}",
+                                tr_with_args(
+                                    "core.mailer.modifying_headers",
+                                    &[("path", file_path.as_str())]
+                                )
+                            );
                             let subject = message.subject().unwrap_or("No Subject").to_string();
                             let text_content = message.body_text(0).unwrap_or_default().to_string();
                             let html_content = message.body_html(0).map(|s| s.to_string());
-                            let recipients_str: Vec<&str> = current_recipients.iter().map(|s| s.as_str()).collect();
+                            let recipients_str: Vec<&str> =
+                                current_recipients.iter().map(|s| s.as_str()).collect();
                             let mut builder = MessageBuilder::new()
                                 .from(("", envelope_from.as_str()))
                                 .to(recipients_str)
@@ -1489,17 +1885,31 @@ impl Mailer {
                             // 保留原始附件
                             for att_part in message.attachments() {
                                 let att_name = att_part.attachment_name().unwrap_or("attachment");
-                                let att_type = att_part.content_type()
+                                let att_type = att_part
+                                    .content_type()
                                     .map(|ct: &mail_parser::ContentType| ct.ctype())
                                     .unwrap_or("application/octet-stream");
-                                builder = builder.attachment(att_type, att_name, att_part.contents());
+                                builder =
+                                    builder.attachment(att_type, att_name, att_part.contents());
                             }
                             match builder.write_to_vec() {
                                 Ok(m_content) => m_content,
                                 Err(e) => {
-                                    error!("{}", tr_with_args("core.mailer.build_email_failed_for", &[("path", file_path.as_str()), ("error", &e.to_string())]));
+                                    error!(
+                                        "{}",
+                                        tr_with_args(
+                                            "core.mailer.build_email_failed_for",
+                                            &[
+                                                ("path", file_path.as_str()),
+                                                ("error", &e.to_string())
+                                            ]
+                                        )
+                                    );
                                     failures.push((
-                                        tr_with_args("core.mailer.error_build_email", &[("error", &e.to_string())]),
+                                        tr_with_args(
+                                            "core.mailer.error_build_email",
+                                            &[("error", &e.to_string())],
+                                        ),
                                         file_path.to_string(),
                                     ));
                                     Self::save_failed_email(config, file_path);
@@ -1509,7 +1919,13 @@ impl Mailer {
                             }
                         } else {
                             // 在默认模式下使用原始邮件内容来保持附件和完整的MIME结构
-                            info!("{}", tr_with_args("core.mailer.using_original_content", &[("path", file_path.as_str())]));
+                            info!(
+                                "{}",
+                                tr_with_args(
+                                    "core.mailer.using_original_content",
+                                    &[("path", file_path.as_str())]
+                                )
+                            );
                             content.clone()
                         };
 
@@ -1521,27 +1937,56 @@ impl Mailer {
                             .await
                             {
                                 Ok(Ok(_)) => {
-                                    info!("{}", tr_with_args("core.mailer.email_send_success", &[("path", file_path.as_str())]));
+                                    info!(
+                                        "{}",
+                                        tr_with_args(
+                                            "core.mailer.email_send_success",
+                                            &[("path", file_path.as_str())]
+                                        )
+                                    );
                                     successes.push((parse_duration_final, send_start.elapsed()));
                                 }
                                 Ok(Err(e)) => {
                                     let raw_error = e.to_string();
-                                    error!("{}", tr_with_args("core.mailer.email_send_failed_for", &[("path", file_path.as_str()), ("error", &raw_error)]));
-                                    let error_msg = tr_with_args("core.mailer.error_send_failed", &[("error", &raw_error)]);
+                                    error!(
+                                        "{}",
+                                        tr_with_args(
+                                            "core.mailer.email_send_failed_for",
+                                            &[("path", file_path.as_str()), ("error", &raw_error)]
+                                        )
+                                    );
+                                    let error_msg = tr_with_args(
+                                        "core.mailer.error_send_failed",
+                                        &[("error", &raw_error)],
+                                    );
                                     failures.push((error_msg, file_path.to_string()));
                                     Self::save_failed_email(config, file_path);
 
                                     // 检测关键SMTP错误（基于原始错误字符串）
                                     if is_connection_error(&raw_error) {
-                                        warn!("{}", tr_with_args("core.mailer.data_connection_error", &[("error", &raw_error)]));
+                                        warn!(
+                                            "{}",
+                                            tr_with_args(
+                                                "core.mailer.data_connection_error",
+                                                &[("error", &raw_error)]
+                                            )
+                                        );
                                         connection_should_reset = true;
                                         break;
                                     }
                                 }
                                 Err(_) => {
-                                    error!("{}", tr_with_args("core.mailer.email_send_timeout_for", &[("path", file_path.as_str())]));
-                                    failures
-                                        .push((tr("core.mailer.error_send_timeout"), file_path.to_string()));
+                                    error!(
+                                        "{}",
+                                        tr_with_args(
+                                            "core.mailer.email_send_timeout_for",
+                                            &[("path", file_path.as_str())]
+                                        )
+                                    );
+                                    failures.push((
+                                        tr("core.mailer.error_send_timeout"),
+                                        file_path.to_string(),
+                                    ));
                                     Self::save_failed_email(config, file_path);
                                 }
                             }
@@ -1555,9 +2000,28 @@ impl Mailer {
                 && running.load(Ordering::SeqCst)
                 && !connection_should_reset
             {
-                info!("{}", tr_with_args("core.mailer.rset_command", &[("current", &(email_idx + 1).to_string()), ("total", &files.len().to_string())]));
+                info!(
+                    "{}",
+                    tr_with_args(
+                        "core.mailer.rset_command",
+                        &[
+                            ("current", &(email_idx + 1).to_string()),
+                            ("total", &files.len().to_string())
+                        ]
+                    )
+                );
                 if let Err(e) = client.rset().await {
-                    warn!("{}", tr_with_args("core.mailer.rset_command_failed", &[("current", &(email_idx + 1).to_string()), ("total", &files.len().to_string()), ("error", &e.to_string())]));
+                    warn!(
+                        "{}",
+                        tr_with_args(
+                            "core.mailer.rset_command_failed",
+                            &[
+                                ("current", &(email_idx + 1).to_string()),
+                                ("total", &files.len().to_string()),
+                                ("error", &e.to_string())
+                            ]
+                        )
+                    );
                     // RSET失败通常意味着连接有问题，标记需要重置连接
                     connection_should_reset = true;
                     break;
@@ -1568,7 +2032,17 @@ impl Mailer {
                 && email_idx + 1 < files.len()
                 && running.load(Ordering::SeqCst)
             {
-                info!("{}", tr_with_args("core.mailer.waiting_next_email", &[("ms", &config.email_send_interval_ms.to_string()), ("current", &(email_idx + 1).to_string()), ("total", &files.len().to_string())]));
+                info!(
+                    "{}",
+                    tr_with_args(
+                        "core.mailer.waiting_next_email",
+                        &[
+                            ("ms", &config.email_send_interval_ms.to_string()),
+                            ("current", &(email_idx + 1).to_string()),
+                            ("total", &files.len().to_string())
+                        ]
+                    )
+                );
                 let sleep_duration =
                     std::time::Duration::from_millis(config.email_send_interval_ms);
                 let running_clone_for_sleep = running.clone();
@@ -1580,7 +2054,16 @@ impl Mailer {
                     _ = tokio::time::sleep(sleep_duration) => {}
                 }
                 if !running.load(Ordering::SeqCst) {
-                    warn!("{}", tr_with_args("core.mailer.email_interval_exit", &[("current", &(email_idx + 1).to_string()), ("total", &files.len().to_string())]));
+                    warn!(
+                        "{}",
+                        tr_with_args(
+                            "core.mailer.email_interval_exit",
+                            &[
+                                ("current", &(email_idx + 1).to_string()),
+                                ("total", &files.len().to_string())
+                            ]
+                        )
+                    );
                     break;
                 }
             }
@@ -1607,7 +2090,13 @@ impl Mailer {
 
         for (email_idx, file_path) in files.iter().enumerate() {
             if !running.load(Ordering::SeqCst) {
-                warn!("{}", tr_with_args("core.mailer.process_group_interrupted", &[("id", &process_group_id.to_string())]));
+                warn!(
+                    "{}",
+                    tr_with_args(
+                        "core.mailer.process_group_interrupted",
+                        &[("id", &process_group_id.to_string())]
+                    )
+                );
                 break;
             }
             let mut had_error_this_email = false;
@@ -1620,17 +2109,30 @@ impl Mailer {
                 Ok(c) => {
                     current_file_parse_duration = Some(parse_start.elapsed());
                     if let Some(anonymizer_ref) = anonymizer.as_mut() {
-                        info!("{}", tr_with_args("core.mailer.anonymizing_email", &[("path", file_path.as_str())]));
+                        info!(
+                            "{}",
+                            tr_with_args(
+                                "core.mailer.anonymizing_email",
+                                &[("path", file_path.as_str())]
+                            )
+                        );
                         anonymizer_ref.anonymize_binary(&c)
                     } else {
                         c
                     }
                 }
                 Err(e) => {
-                    error!("{}", tr_with_args("core.mailer.read_file_failed", &[("path", file_path.as_str()), ("error", &e.to_string())]));
-                    group_stats
-                        .3
-                        .push((tr_with_args("core.mailer.error_read_file", &[("error", &e.to_string())]), file_path.to_string()));
+                    error!(
+                        "{}",
+                        tr_with_args(
+                            "core.mailer.read_file_failed",
+                            &[("path", file_path.as_str()), ("error", &e.to_string())]
+                        )
+                    );
+                    group_stats.3.push((
+                        tr_with_args("core.mailer.error_read_file", &[("error", &e.to_string())]),
+                        file_path.to_string(),
+                    ));
                     Self::save_failed_email(config, file_path);
                     had_error_this_email = true;
                     Vec::new()
@@ -1643,7 +2145,13 @@ impl Mailer {
                 let message = match MessageParser::default().parse(&content) {
                     Some(msg) => msg,
                     None => {
-                        error!("{}", tr_with_args("core.mailer.parse_email_failed", &[("path", file_path.as_str())]));
+                        error!(
+                            "{}",
+                            tr_with_args(
+                                "core.mailer.parse_email_failed",
+                                &[("path", file_path.as_str())]
+                            )
+                        );
                         group_stats
                             .3
                             .push((tr("core.mailer.error_parse_email"), file_path.to_string()));
@@ -1659,17 +2167,33 @@ impl Mailer {
                     let mut email_send_op_failed = false;
 
                     // 确定发件人地址：优先使用CLI指定的--from，否则从EML提取
-                    let envelope_from = if let Some(ref from) = config.from.as_ref().filter(|s| !s.is_empty()) {
+                    let envelope_from = if let Some(ref from) =
+                        config.from.as_ref().filter(|s| !s.is_empty())
+                    {
                         from.to_string()
                     } else {
                         match extract_first_email(message.from()) {
                             Some(addr) => {
-                                info!("{}", tr_with_args("core.mailer.using_eml_from", &[("addr", addr.as_str()), ("path", file_path.as_str())]));
+                                info!(
+                                    "{}",
+                                    tr_with_args(
+                                        "core.mailer.using_eml_from",
+                                        &[("addr", addr.as_str()), ("path", file_path.as_str())]
+                                    )
+                                );
                                 addr
                             }
                             None => {
-                                error!("{}", tr_with_args("core.mailer.extract_from_failed", &[("path", file_path.as_str())]));
-                                group_stats.3.push((tr("core.mailer.error_no_from"), file_path.to_string()));
+                                error!(
+                                    "{}",
+                                    tr_with_args(
+                                        "core.mailer.extract_from_failed",
+                                        &[("path", file_path.as_str())]
+                                    )
+                                );
+                                group_stats
+                                    .3
+                                    .push((tr("core.mailer.error_no_from"), file_path.to_string()));
                                 Self::save_failed_email(config, file_path);
                                 continue;
                             }
@@ -1677,20 +2201,43 @@ impl Mailer {
                     };
 
                     // 确定收件人地址：优先使用CLI指定的--to，否则从EML提取
-                    let current_recipients: Vec<String> = if let Some(ref recips) = global_recipients {
-                        recips.clone()
-                    } else {
-                        let eml_recipients = extract_all_recipients(&message, config.envelope_cc_bcc);
-                        if !eml_recipients.is_empty() {
-                            info!("{}", tr_with_args("core.mailer.using_eml_recipients", &[("addrs", &format!("{:?}", eml_recipients)), ("path", file_path.as_str())]));
-                        }
-                        eml_recipients
-                    };
+                    let current_recipients: Vec<String> =
+                        if let Some(ref recips) = global_recipients {
+                            recips.clone()
+                        } else {
+                            let eml_recipients =
+                                extract_all_recipients(&message, config.envelope_cc_bcc);
+                            if !eml_recipients.is_empty() {
+                                info!(
+                                    "{}",
+                                    tr_with_args(
+                                        "core.mailer.using_eml_recipients",
+                                        &[
+                                            ("addrs", &format!("{:?}", eml_recipients)),
+                                            ("path", file_path.as_str())
+                                        ]
+                                    )
+                                );
+                            }
+                            eml_recipients
+                        };
 
                     if current_recipients.is_empty() {
-                        error!("{}", tr_with_args("core.mailer.no_valid_recipients", &[("path", file_path.as_str()), ("to", config.to.as_deref().unwrap_or("<from EML>"))]));
+                        error!(
+                            "{}",
+                            tr_with_args(
+                                "core.mailer.no_valid_recipients",
+                                &[
+                                    ("path", file_path.as_str()),
+                                    ("to", config.to.as_deref().unwrap_or("<from EML>"))
+                                ]
+                            )
+                        );
                         group_stats.3.push((
-                            tr_with_args("core.mailer.error_no_recipients", &[("to", config.to.as_deref().unwrap_or("<from EML>"))]),
+                            tr_with_args(
+                                "core.mailer.error_no_recipients",
+                                &[("to", config.to.as_deref().unwrap_or("<from EML>"))],
+                            ),
                             file_path.to_string(),
                         ));
                         Self::save_failed_email(config, file_path);
@@ -1698,20 +2245,32 @@ impl Mailer {
                     }
 
                     if !email_send_op_failed {
-                        if let Err(e) = client.mail_from(&envelope_from, &empty_params).await
-                        {
+                        if let Err(e) = client.mail_from(&envelope_from, &empty_params).await {
                             let raw_error = e.to_string();
-                            error!("{}", tr_with_args("core.mailer.set_sender_failed_for", &[("path", file_path.as_str()), ("error", &raw_error)]));
-                            let error_msg = tr_with_args("core.mailer.error_set_sender", &[("error", &raw_error)]);
-                            group_stats
-                                .3
-                                .push((error_msg, file_path.to_string()));
+                            error!(
+                                "{}",
+                                tr_with_args(
+                                    "core.mailer.set_sender_failed_for",
+                                    &[("path", file_path.as_str()), ("error", &raw_error)]
+                                )
+                            );
+                            let error_msg = tr_with_args(
+                                "core.mailer.error_set_sender",
+                                &[("error", &raw_error)],
+                            );
+                            group_stats.3.push((error_msg, file_path.to_string()));
                             Self::save_failed_email(config, file_path);
                             email_send_op_failed = true;
 
                             // 检测关键SMTP错误（基于原始错误字符串）
                             if is_connection_error(&raw_error) {
-                                warn!("{}", tr_with_args("core.mailer.connection_error_detected", &[("error", &raw_error)]));
+                                warn!(
+                                    "{}",
+                                    tr_with_args(
+                                        "core.mailer.connection_error_detected",
+                                        &[("error", &raw_error)]
+                                    )
+                                );
                                 break;
                             }
                         }
@@ -1720,19 +2279,51 @@ impl Mailer {
                     if !email_send_op_failed {
                         let mut any_rcpt_succeeded = false;
                         for recipient in &current_recipients {
-                            if let Err(e) = client.rcpt_to(recipient.as_str(), &empty_params).await {
-                                error!("{}", tr_with_args("core.mailer.set_recipient_failed_for", &[("recipient", recipient.as_str()), ("path", file_path.as_str()), ("error", &e.to_string())]));
+                            if let Err(e) = client.rcpt_to(recipient.as_str(), &empty_params).await
+                            {
+                                error!(
+                                    "{}",
+                                    tr_with_args(
+                                        "core.mailer.set_recipient_failed_for",
+                                        &[
+                                            ("recipient", recipient.as_str()),
+                                            ("path", file_path.as_str()),
+                                            ("error", &e.to_string())
+                                        ]
+                                    )
+                                );
                                 group_stats.3.push((
-                                    tr_with_args("core.mailer.error_set_recipient", &[("recipient", recipient.as_str()), ("error", &e.to_string())]),
+                                    tr_with_args(
+                                        "core.mailer.error_set_recipient",
+                                        &[
+                                            ("recipient", recipient.as_str()),
+                                            ("error", &e.to_string()),
+                                        ],
+                                    ),
                                     file_path.to_string(),
                                 ));
                             } else {
-                                info!("{}", tr_with_args("core.mailer.set_recipient_success", &[("recipient", recipient.as_str()), ("path", file_path.as_str())]));
+                                info!(
+                                    "{}",
+                                    tr_with_args(
+                                        "core.mailer.set_recipient_success",
+                                        &[
+                                            ("recipient", recipient.as_str()),
+                                            ("path", file_path.as_str())
+                                        ]
+                                    )
+                                );
                                 any_rcpt_succeeded = true;
                             }
                         }
                         if !any_rcpt_succeeded && !current_recipients.is_empty() {
-                            error!("{}", tr_with_args("core.mailer.all_recipients_failed", &[("path", file_path.as_str())]));
+                            error!(
+                                "{}",
+                                tr_with_args(
+                                    "core.mailer.all_recipients_failed",
+                                    &[("path", file_path.as_str())]
+                                )
+                            );
                             Self::save_failed_email(config, file_path);
                             email_send_op_failed = true;
                         }
@@ -1740,14 +2331,27 @@ impl Mailer {
 
                     if !email_send_op_failed {
                         let mail_data_to_send = if config.keep_headers {
-                            info!("{}", tr_with_args("core.mailer.using_original_headers", &[("path", file_path.as_str())]));
+                            info!(
+                                "{}",
+                                tr_with_args(
+                                    "core.mailer.using_original_headers",
+                                    &[("path", file_path.as_str())]
+                                )
+                            );
                             content.clone()
                         } else if config.modify_headers {
-                            info!("{}", tr_with_args("core.mailer.modifying_headers", &[("path", file_path.as_str())]));
+                            info!(
+                                "{}",
+                                tr_with_args(
+                                    "core.mailer.modifying_headers",
+                                    &[("path", file_path.as_str())]
+                                )
+                            );
                             let subject = message.subject().unwrap_or("No Subject").to_string();
                             let text_content = message.body_text(0).unwrap_or_default().to_string();
                             let html_content = message.body_html(0).map(|s| s.to_string());
-                            let recipients_str: Vec<&str> = current_recipients.iter().map(|s| s.as_str()).collect();
+                            let recipients_str: Vec<&str> =
+                                current_recipients.iter().map(|s| s.as_str()).collect();
                             let mut builder = MessageBuilder::new()
                                 .from(("", envelope_from.as_str()))
                                 .to(recipients_str)
@@ -1759,17 +2363,31 @@ impl Mailer {
                             // 保留原始附件
                             for att_part in message.attachments() {
                                 let att_name = att_part.attachment_name().unwrap_or("attachment");
-                                let att_type = att_part.content_type()
+                                let att_type = att_part
+                                    .content_type()
                                     .map(|ct: &mail_parser::ContentType| ct.ctype())
                                     .unwrap_or("application/octet-stream");
-                                builder = builder.attachment(att_type, att_name, att_part.contents());
+                                builder =
+                                    builder.attachment(att_type, att_name, att_part.contents());
                             }
                             match builder.write_to_vec() {
                                 Ok(m_content) => m_content,
                                 Err(e) => {
-                                    error!("{}", tr_with_args("core.mailer.build_email_failed_for", &[("path", file_path.as_str()), ("error", &e.to_string())]));
+                                    error!(
+                                        "{}",
+                                        tr_with_args(
+                                            "core.mailer.build_email_failed_for",
+                                            &[
+                                                ("path", file_path.as_str()),
+                                                ("error", &e.to_string())
+                                            ]
+                                        )
+                                    );
                                     group_stats.3.push((
-                                        tr_with_args("core.mailer.error_build_email", &[("error", &e.to_string())]),
+                                        tr_with_args(
+                                            "core.mailer.error_build_email",
+                                            &[("error", &e.to_string())],
+                                        ),
                                         file_path.to_string(),
                                     ));
                                     Self::save_failed_email(config, file_path);
@@ -1779,7 +2397,13 @@ impl Mailer {
                             }
                         } else {
                             // 在默认模式下使用原始邮件内容来保持附件和完整的MIME结构
-                            info!("{}", tr_with_args("core.mailer.using_original_content", &[("path", file_path.as_str())]));
+                            info!(
+                                "{}",
+                                tr_with_args(
+                                    "core.mailer.using_original_content",
+                                    &[("path", file_path.as_str())]
+                                )
+                            );
                             content.clone()
                         };
 
@@ -1791,31 +2415,57 @@ impl Mailer {
                             .await
                             {
                                 Ok(Ok(_)) => {
-                                    info!("{}", tr_with_args("core.mailer.email_send_success", &[("path", file_path.as_str())]));
+                                    info!(
+                                        "{}",
+                                        tr_with_args(
+                                            "core.mailer.email_send_success",
+                                            &[("path", file_path.as_str())]
+                                        )
+                                    );
                                     group_stats.0 += 1;
                                     group_stats.1.push(parse_duration_final);
                                     group_stats.2.push(send_start.elapsed());
                                 }
                                 Ok(Err(e)) => {
                                     let raw_error = e.to_string();
-                                    error!("{}", tr_with_args("core.mailer.email_send_failed_for", &[("path", file_path.as_str()), ("error", &raw_error)]));
-                                    let error_msg = tr_with_args("core.mailer.error_send_failed", &[("error", &raw_error)]);
-                                    group_stats
-                                        .3
-                                        .push((error_msg, file_path.to_string()));
+                                    error!(
+                                        "{}",
+                                        tr_with_args(
+                                            "core.mailer.email_send_failed_for",
+                                            &[("path", file_path.as_str()), ("error", &raw_error)]
+                                        )
+                                    );
+                                    let error_msg = tr_with_args(
+                                        "core.mailer.error_send_failed",
+                                        &[("error", &raw_error)],
+                                    );
+                                    group_stats.3.push((error_msg, file_path.to_string()));
                                     Self::save_failed_email(config, file_path);
 
                                     // 检测关键SMTP错误（基于原始错误字符串）
                                     if is_connection_error(&raw_error) {
-                                        warn!("{}", tr_with_args("core.mailer.data_connection_error", &[("error", &raw_error)]));
+                                        warn!(
+                                            "{}",
+                                            tr_with_args(
+                                                "core.mailer.data_connection_error",
+                                                &[("error", &raw_error)]
+                                            )
+                                        );
                                         break;
                                     }
                                 }
                                 Err(_) => {
-                                    error!("{}", tr_with_args("core.mailer.email_send_timeout_for", &[("path", file_path.as_str())]));
-                                    group_stats
-                                        .3
-                                        .push((tr("core.mailer.error_send_timeout"), file_path.to_string()));
+                                    error!(
+                                        "{}",
+                                        tr_with_args(
+                                            "core.mailer.email_send_timeout_for",
+                                            &[("path", file_path.as_str())]
+                                        )
+                                    );
+                                    group_stats.3.push((
+                                        tr("core.mailer.error_send_timeout"),
+                                        file_path.to_string(),
+                                    ));
                                     Self::save_failed_email(config, file_path);
                                 }
                             }
@@ -1826,9 +2476,28 @@ impl Mailer {
 
             // 添加RSET命令：如果还有更多邮件要发送，重置SMTP状态
             if email_idx + 1 < files.len() && running.load(Ordering::SeqCst) {
-                info!("{}", tr_with_args("core.mailer.rset_command", &[("current", &(email_idx + 1).to_string()), ("total", &files.len().to_string())]));
+                info!(
+                    "{}",
+                    tr_with_args(
+                        "core.mailer.rset_command",
+                        &[
+                            ("current", &(email_idx + 1).to_string()),
+                            ("total", &files.len().to_string())
+                        ]
+                    )
+                );
                 if let Err(e) = client.rset().await {
-                    warn!("{}", tr_with_args("core.mailer.rset_command_failed", &[("current", &(email_idx + 1).to_string()), ("total", &files.len().to_string()), ("error", &e.to_string())]));
+                    warn!(
+                        "{}",
+                        tr_with_args(
+                            "core.mailer.rset_command_failed",
+                            &[
+                                ("current", &(email_idx + 1).to_string()),
+                                ("total", &files.len().to_string()),
+                                ("error", &e.to_string())
+                            ]
+                        )
+                    );
                     // RSET失败通常意味着连接有问题，提前退出批次
                     break;
                 }
@@ -1838,7 +2507,17 @@ impl Mailer {
                 && email_idx + 1 < files.len()
                 && running.load(Ordering::SeqCst)
             {
-                info!("{}", tr_with_args("core.mailer.waiting_next_email", &[("ms", &config.email_send_interval_ms.to_string()), ("current", &(email_idx + 1).to_string()), ("total", &files.len().to_string())]));
+                info!(
+                    "{}",
+                    tr_with_args(
+                        "core.mailer.waiting_next_email",
+                        &[
+                            ("ms", &config.email_send_interval_ms.to_string()),
+                            ("current", &(email_idx + 1).to_string()),
+                            ("total", &files.len().to_string())
+                        ]
+                    )
+                );
                 let sleep_duration =
                     std::time::Duration::from_millis(config.email_send_interval_ms);
                 let running_clone_for_sleep = running.clone();
@@ -1850,7 +2529,16 @@ impl Mailer {
                     _ = tokio::time::sleep(sleep_duration) => {}
                 }
                 if !running.load(Ordering::SeqCst) {
-                    warn!("{}", tr_with_args("core.mailer.email_interval_exit", &[("current", &(email_idx + 1).to_string()), ("total", &files.len().to_string())]));
+                    warn!(
+                        "{}",
+                        tr_with_args(
+                            "core.mailer.email_interval_exit",
+                            &[
+                                ("current", &(email_idx + 1).to_string()),
+                                ("total", &files.len().to_string())
+                            ]
+                        )
+                    );
                     break;
                 }
             }

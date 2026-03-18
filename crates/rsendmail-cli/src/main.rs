@@ -41,7 +41,13 @@ async fn main() -> anyhow::Result<()> {
     let mut remaining = if config.r#loop {
         None // true infinite loop
     } else if config.repeat == 0 {
-        warn!("{}", tr_with_args("cli_main.starting_round", &[("current", "0"), ("total", "0")]));
+        warn!(
+            "{}",
+            tr_with_args(
+                "cli_main.starting_round",
+                &[("current", "0"), ("total", "0")]
+            )
+        );
         return Ok(()); // --repeat 0 means no iterations
     } else {
         Some(config.repeat)
@@ -54,7 +60,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Main send loop
     let mut current_iteration = 1;
-    while remaining.map_or(true, |r| r > 0) && running.load(Ordering::SeqCst) {
+    while remaining.is_none_or(|r| r > 0) && running.load(Ordering::SeqCst) {
         let total_str = if config.r#loop {
             "∞".to_string()
         } else {
@@ -117,7 +123,7 @@ async fn main() -> anyhow::Result<()> {
                 info!("{}", stats);
 
                 // Wait before next iteration if not the last one
-                if remaining.map_or(true, |r| r > 1) && running.load(Ordering::SeqCst) {
+                if remaining.is_none_or(|r| r > 1) && running.load(Ordering::SeqCst) {
                     info!(
                         "{}",
                         tr_with_args(

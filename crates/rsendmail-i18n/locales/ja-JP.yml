@@ -285,6 +285,17 @@ gui:
   error_no_attachment_dir: "添付ディレクトリを選択してください"
   error_no_username: "認証にはユーザー名が必要です"
   error_no_password: "認証にはパスワードが必要です"
+  guide:
+    title: "RSendMail ユーザーガイド"
+    desc: "一括メール送信タスクを安全かつ効果的に接続、構成、操作する方法について説明します。"
+    smtp_title: "1. SMTP 基本構成"
+    smtp_desc: "<p class=\"leading-relaxed\">ここではメールプロバイダーへの接続を設定します。<strong>サーバーアドレス</strong>と<strong>ポート</strong>は必須項目です。プロバイダーが認証を要求する場合は、<strong>認証が必要</strong>にチェックを入れ、ユーザー名とパスワードを入力してください。ゲートウェイで暗号化通信が義務付けられている場合は、<strong class=\"text-indigo-600 dark:text-indigo-400\">TLS を使用</strong>にチェックを入れてください。</p>"
+    modes_title: "2. ターゲットルーティングと送信モード"
+    modes_desc: "<ul class=\"list-disc pl-5 space-y-2.5 leading-relaxed\"><li><strong>EML 一括：</strong> 大量テンプレート送信に最適です。<code class=\"bg-white dark:bg-slate-950 px-1 py-0.5 rounded border border-slate-200 dark:border-slate-800\">.eml</code> ファイルが格納されたフォルダを読み込み、安全かつネイティブに連続送信します。</li><li><strong>単一添付：</strong> 指定した1つのテキストやファイルを対象とし、ターゲットリスト向けに同一のメールを構築します（送信者/受信者/件名/本文等の標準設定が必要）。</li><li><strong>フォルダ添付：</strong> 指定したディレクトリ内のすべてのファイルを順番に添付ファイルとして取得し一括送信します。</li></ul>"
+    adv_title: "3. 高度な処理と高並行パフォーマンスの調整"
+    adv_desc: "<p class=\"leading-relaxed\">大容量キューの実行時、RSendMail は非同期マルチスレッドエンジンで並行処理を行います。ネットワークのIP制限を回避するため、<strong>プロセス数</strong>または<strong class=\"text-indigo-600 dark:text-indigo-400\">バッチサイズ</strong>を変更して同時送信数を制御できます。送信元のプライバシー保護が求められるシナリオでは、<strong>メールを匿名化</strong>オプションを有効にすることでネイティブなドメイン匿名ルーティングを実現できます。</p>"
+    loop_title: "4. 無限ループとフェイルオーバーエンジン"
+    loop_desc: "<p class=\"leading-relaxed\"><strong>無限ループ</strong>のチェックを外すと、厳密な<strong>繰り返し回数</strong>を指定できます。エンジンは設定回数の送信が完了するとリソースを回収し、安全にプロセスを停止します。<strong>ループ間隔</strong>は、再送開始前のバッファを提供してプロバイダー側のAPI制限を防ぎます。サーバー側の不可逆なネットワーク遅延が発生した場合は、<strong>リトライ間隔</strong>がハートビート再試行をサポートします。</p>"
 
 # ===== 共通メッセージ =====
 common:

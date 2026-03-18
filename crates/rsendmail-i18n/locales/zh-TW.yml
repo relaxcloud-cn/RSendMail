@@ -285,6 +285,17 @@ gui:
   error_no_attachment_dir: "請選擇附件目錄"
   error_no_username: "認證模式需要輸入使用者名稱"
   error_no_password: "認證模式需要輸入密碼"
+  guide:
+    title: "RSendMail 使用者指南"
+    desc: "了解如何快速連線設定，並安全、有效率地執行大批次郵件發送任務。"
+    smtp_title: "1. SMTP 基礎設定"
+    smtp_desc: "<p class=\"leading-relaxed\">此處用於建立與郵件服務商的連線。<strong>伺服器地址</strong>和<strong>連接埠</strong>為必填欄位。如果服務商要求身分驗證，請勾選<strong>需要認證</strong>並輸入您的帳號密碼。如果閘道強制使用加密傳輸，請勾選<strong class=\"text-indigo-600 dark:text-indigo-400\">使用 TLS</strong>。</p>"
+    modes_title: "2. 目標路由與發送模式"
+    modes_desc: "<ul class=\"list-disc pl-5 space-y-2.5 leading-relaxed\"><li><strong>EML 批次發送：</strong> 適用於大批次客製化郵件。它會安全讀取並連續發送包含 <code class=\"bg-white dark:bg-slate-950 px-1 py-0.5 rounded border border-slate-200 dark:border-slate-800\">.eml</code> 檔案的整個資料來源目錄。</li><li><strong>單一附件發送：</strong> 使用指定的單一目標檔案，建構相同的郵件發送給所有接收者清單。需要標準設定（寄件人/收件人/主旨/內文）。</li><li><strong>目錄附件發送：</strong> 批次依序擷取特定目錄內的所有檔案作為附件發送。</li></ul>"
+    adv_title: "3. 進階處理與高並發效能調校"
+    adv_desc: "<p class=\"leading-relaxed\">在執行超大佇列發送時，RSendMail 實作底層非同步引擎執行平行排程。您可以設定<strong>處理程序數</strong>或修改<strong class=\"text-indigo-600 dark:text-indigo-400\">批次大小</strong>來控制同時平行的郵件請求數量，以規避網路 IP 頻率控制問題。對於要求隱匿寄件人的使用情境，您可以勾選<strong>匿名化郵箱</strong>選項實現網域級匿名動態路由轉發。</p>"
+    loop_title: "4. 無限循環與熔斷容錯引擎"
+    loop_desc: "<p class=\"leading-relaxed\">取消勾選<strong>無限循環</strong>可限定嚴格的<strong>重複次數</strong>。引擎在負載履行完畢後會優雅地停止工作階段回收資源。<strong>循環間隔</strong>能保障系統在下一輪次循環投遞開始前進行等待緩衝，防止因 API 頻率觸發發信商熔斷。若遇到伺服器端不可逆網路降級，<strong>重試間隔</strong>可進行心跳重試保障容錯性。</p>"
 
 # ===== 通用訊息 =====
 common:

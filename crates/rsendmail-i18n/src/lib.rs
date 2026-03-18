@@ -8,6 +8,7 @@
 //! - Simplified Chinese (zh-CN)
 //! - Traditional Chinese (zh-TW)
 //! - Japanese (ja-JP)
+//! - Korean (ko-KR)
 //!
 //! # Usage
 //! ```rust,ignore
@@ -24,12 +25,14 @@
 rust_i18n::i18n!("locales", fallback = "en-US");
 
 /// Supported languages
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Language {
+    #[default]
     English,
     SimplifiedChinese,
     TraditionalChinese,
     Japanese,
+    Korean,
 }
 
 impl Language {
@@ -40,6 +43,7 @@ impl Language {
             Language::SimplifiedChinese => "zh-CN",
             Language::TraditionalChinese => "zh-TW",
             Language::Japanese => "ja-JP",
+            Language::Korean => "ko-KR",
         }
     }
 
@@ -50,6 +54,7 @@ impl Language {
             Language::SimplifiedChinese => "简体中文",
             Language::TraditionalChinese => "繁體中文",
             Language::Japanese => "日本語",
+            Language::Korean => "한국어",
         }
     }
 
@@ -60,26 +65,20 @@ impl Language {
             Language::SimplifiedChinese => "zh-CN",
             Language::TraditionalChinese => "zh-TW",
             Language::Japanese => "ja",
+            Language::Korean => "ko",
         }
     }
 
     /// Parse language from string (supports various formats)
-    pub fn from_str(s: &str) -> Option<Self> {
-        let s = s.to_lowercase();
-        match s.as_str() {
-            "en" | "en-us" | "en_us" | "english" => Some(Language::English),
-            "zh-cn" | "zh_cn" | "zh-hans" | "zh" | "chinese" => Some(Language::SimplifiedChinese),
-            "zh-tw" | "zh_tw" | "zh-hant" | "zh-hk" | "zh_hk" => Some(Language::TraditionalChinese),
-            "ja" | "ja-jp" | "ja_jp" | "japanese" => Some(Language::Japanese),
-            _ => None,
-        }
+    pub fn parse(s: &str) -> Option<Self> {
+        s.parse().ok()
     }
 
     /// Detect language from system environment
     pub fn from_system() -> Self {
         // Check RSENDMAIL_LANG first
         if let Ok(lang) = std::env::var("RSENDMAIL_LANG") {
-            if let Some(l) = Self::from_str(&lang) {
+            if let Some(l) = Self::parse(&lang) {
                 return l;
             }
         }
@@ -110,7 +109,7 @@ impl Language {
             }
         }
 
-        Language::English
+        Self::default()
     }
 
     fn from_locale_string(s: &str) -> Option<Self> {
@@ -126,6 +125,8 @@ impl Language {
             Some(Language::TraditionalChinese)
         } else if s.starts_with("ja") {
             Some(Language::Japanese)
+        } else if s.starts_with("ko") {
+            Some(Language::Korean)
         } else if s.starts_with("en") {
             Some(Language::English)
         } else {
@@ -140,7 +141,8 @@ impl Language {
             1 => Language::SimplifiedChinese,
             2 => Language::TraditionalChinese,
             3 => Language::Japanese,
-            _ => Language::English,
+            4 => Language::Korean,
+            _ => Self::default(),
         }
     }
 
@@ -151,6 +153,7 @@ impl Language {
             Language::SimplifiedChinese => 1,
             Language::TraditionalChinese => 2,
             Language::Japanese => 3,
+            Language::Korean => 4,
         }
     }
 
@@ -161,6 +164,7 @@ impl Language {
             Language::SimplifiedChinese,
             Language::TraditionalChinese,
             Language::Japanese,
+            Language::Korean,
         ]
     }
 
@@ -170,9 +174,23 @@ impl Language {
     }
 }
 
-impl Default for Language {
-    fn default() -> Self {
-        Language::English
+impl std::str::FromStr for Language {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.to_lowercase();
+        match s.as_str() {
+            "en" | "en-us" | "en_us" | "english" => Ok(Language::English),
+            "zh-cn" | "zh_cn" | "zh-hans" | "zh" | "chinese" => {
+                Ok(Language::SimplifiedChinese)
+            }
+            "zh-tw" | "zh_tw" | "zh-hant" | "zh-hk" | "zh_hk" => {
+                Ok(Language::TraditionalChinese)
+            }
+            "ja" | "ja-jp" | "ja_jp" | "japanese" => Ok(Language::Japanese),
+            "ko" | "ko-kr" | "ko_kr" | "korean" => Ok(Language::Korean),
+            _ => Err(()),
+        }
     }
 }
 
@@ -194,6 +212,7 @@ pub fn current_language() -> Language {
         "zh-CN" => Language::SimplifiedChinese,
         "zh-TW" => Language::TraditionalChinese,
         "ja-JP" => Language::Japanese,
+        "ko-KR" => Language::Korean,
         _ => Language::English,
     }
 }
@@ -232,11 +251,17 @@ mod tests {
 
     #[test]
     fn test_language_from_str() {
-        assert_eq!(Language::from_str("en"), Some(Language::English));
-        assert_eq!(Language::from_str("zh-CN"), Some(Language::SimplifiedChinese));
-        assert_eq!(Language::from_str("zh-TW"), Some(Language::TraditionalChinese));
-        assert_eq!(Language::from_str("ja"), Some(Language::Japanese));
-        assert_eq!(Language::from_str("unknown"), None);
+        assert_eq!(Language::parse("en"), Some(Language::English));
+        assert_eq!(
+            Language::parse("zh-CN"),
+            Some(Language::SimplifiedChinese)
+        );
+        assert_eq!(
+            Language::parse("zh-TW"),
+            Some(Language::TraditionalChinese)
+        );
+        assert_eq!(Language::parse("ja"), Some(Language::Japanese));
+        assert_eq!(Language::parse("unknown"), None);
     }
 
     #[test]

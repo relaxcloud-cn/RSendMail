@@ -285,6 +285,17 @@ gui:
   error_no_attachment_dir: "请选择附件目录"
   error_no_username: "认证模式需要输入用户名"
   error_no_password: "认证模式需要输入密码"
+  guide:
+    title: "RSendMail 用户使用指南"
+    desc: "了解如何快速连接配置，并安全、高效地执行大批量邮件发送任务。"
+    smtp_title: "1. SMTP 基础配置"
+    smtp_desc: "<p class=\"leading-relaxed\">此处用于建立与邮件服务商的连接。<strong>服务器地址</strong>和<strong>端口</strong>为必填项。如果服务商要求身份校验，请勾选<strong>需要认证</strong>并输入您的账号密码。如果网关强制使用加密传输，请勾选<strong class=\"text-indigo-600 dark:text-indigo-400\">使用 TLS</strong>。</p>"
+    modes_title: "2. 目标路由与发送模式"
+    modes_desc: "<ul class=\"list-disc pl-5 space-y-2.5 leading-relaxed\"><li><strong>EML 批量发送：</strong> 适用于大批量定制邮件。它会安全读取并连续发送包含 <code class=\"bg-white dark:bg-slate-950 px-1 py-0.5 rounded border border-slate-200 dark:border-slate-800\">.eml</code> 文件的整个数据源目录。</li><li><strong>单一附件发送：</strong> 使用指定的单个目标文件，构建相同的邮件发送给所有接收者列表。需要标准配置（发件人/收件人/主题/正文）。</li><li><strong>目录附件发送：</strong> 批量依次提取特定目录内的所有文件作为附件发送。</li></ul>"
+    adv_title: "3. 进阶处理与高并发性能调优"
+    adv_desc: "<p class=\"leading-relaxed\">在执行超大队列发送时，RSendMail 实现底层异步引擎执行并行调度。您可以设置<strong>进程数</strong>或修改<strong class=\"text-indigo-600 dark:text-indigo-400\">批量大小</strong>来控制同时并行的邮件请求数量，以规避网络IP频控问题。对于要求隐匿发件人的使用场景，您可以勾选<strong>匿名化邮箱</strong>选项实现域名级匿名动态路由转发。</p>"
+    loop_title: "4. 无限循环与熔断容错引擎"
+    loop_desc: "<p class=\"leading-relaxed\">取消勾选<strong>无限循环</strong>可限定严格的<strong>重复次数</strong>。引擎在负载履行完毕后会优雅地停止进程回收资源。<strong>循环间隔</strong>能保障系统在下一轮次循环投递开始前进行等待缓冲，防止因API频率触发发信商熔断。若遇到服务端不可逆网络降级，<strong>重试间隔</strong>可进行心跳重试保障容错性。</p>"
 
 # ===== 通用消息 =====
 common:

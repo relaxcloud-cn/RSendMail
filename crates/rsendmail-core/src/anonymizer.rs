@@ -55,7 +55,6 @@ impl EmailAnonymizer {
         let anonymized = self.anonymize_text(text);
         anonymized.into_bytes()
     }
-
 }
 
 #[cfg(test)]

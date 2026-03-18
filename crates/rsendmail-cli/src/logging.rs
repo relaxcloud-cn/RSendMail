@@ -35,15 +35,29 @@ pub fn init_logging(level: LevelFilter, log_file: Option<&str>) {
             ),
             WriteLogger::new(level, log_config, log_file),
         ])
-        .unwrap_or_else(|e| panic!("{}", tr_with_args("cli_logging.init_log_failed", &[("error", &e.to_string())])));
+        .unwrap_or_else(|e| {
+            panic!(
+                "{}",
+                tr_with_args("cli_logging.init_log_failed", &[("error", &e.to_string())])
+            )
+        });
 
         log::info!(
             "{}",
-            tr_with_args("cli_logging.log_to_console_and_file", &[("path", log_file_path)])
+            tr_with_args(
+                "cli_logging.log_to_console_and_file",
+                &[("path", log_file_path)]
+            )
         );
     } else {
         // 如果没有指定日志文件，只输出到控制台
-        TermLogger::init(level, log_config, TerminalMode::Mixed, ColorChoice::Auto)
-            .unwrap_or_else(|e| panic!("{}", tr_with_args("cli_logging.init_log_failed", &[("error", &e.to_string())])));
+        TermLogger::init(level, log_config, TerminalMode::Mixed, ColorChoice::Auto).unwrap_or_else(
+            |e| {
+                panic!(
+                    "{}",
+                    tr_with_args("cli_logging.init_log_failed", &[("error", &e.to_string())])
+                )
+            },
+        );
     }
 }

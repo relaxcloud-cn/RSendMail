@@ -60,7 +60,10 @@ impl fmt::Display for Stats {
         writeln!(
             f,
             "{}",
-            tr_with_args("core.stats.total_processed", &[("count", &total_processed.to_string())])
+            tr_with_args(
+                "core.stats.total_processed",
+                &[("count", &total_processed.to_string())]
+            )
         )?;
         writeln!(
             f,
@@ -127,7 +130,10 @@ impl fmt::Display for Stats {
             tr_with_args(
                 "core.stats.parse_duration",
                 &[
-                    ("seconds", &format!("{:.2}", total_parse_duration.as_secs_f64())),
+                    (
+                        "seconds",
+                        &format!("{:.2}", total_parse_duration.as_secs_f64())
+                    ),
                     ("qps", &format!("{:.2}", parse_qps))
                 ]
             )
@@ -141,7 +147,10 @@ impl fmt::Display for Stats {
             tr_with_args(
                 "core.stats.send_duration",
                 &[
-                    ("seconds", &format!("{:.2}", total_send_duration.as_secs_f64())),
+                    (
+                        "seconds",
+                        &format!("{:.2}", total_send_duration.as_secs_f64())
+                    ),
                     ("qps", &format!("{:.2}", send_qps))
                 ]
             )

@@ -179,7 +179,10 @@ static TRANSLATIONS: LazyLock<HashMap<Language, HashMap<&'static str, &'static s
         en.insert("error-no-recipient", "Please enter recipient address");
         en.insert("error-no-eml-dir", "Please select EML directory");
         en.insert("error-no-attachment", "Please select attachment file");
-        en.insert("error-no-attachment-dir", "Please select attachment directory");
+        en.insert(
+            "error-no-attachment-dir",
+            "Please select attachment directory",
+        );
         en.insert("error-no-username", "Authentication requires username");
         en.insert("error-no-password", "Authentication requires password");
         map.insert(Language::English, en);
@@ -420,12 +423,18 @@ static TRANSLATIONS: LazyLock<HashMap<Language, HashMap<&'static str, &'static s
         ja.insert("status-completed", "完了");
         // Error messages
         ja.insert("error-title", "エラー");
-        ja.insert("error-no-smtp-server", "SMTPサーバーアドレスを入力してください");
+        ja.insert(
+            "error-no-smtp-server",
+            "SMTPサーバーアドレスを入力してください",
+        );
         ja.insert("error-no-sender", "送信者アドレスを入力してください");
         ja.insert("error-no-recipient", "受信者アドレスを入力してください");
         ja.insert("error-no-eml-dir", "EMLディレクトリを選択してください");
         ja.insert("error-no-attachment", "添付ファイルを選択してください");
-        ja.insert("error-no-attachment-dir", "添付ディレクトリを選択してください");
+        ja.insert(
+            "error-no-attachment-dir",
+            "添付ディレクトリを選択してください",
+        );
         ja.insert("error-no-username", "認証にはユーザー名が必要です");
         ja.insert("error-no-password", "認証にはパスワードが必要です");
         map.insert(Language::Japanese, ja);

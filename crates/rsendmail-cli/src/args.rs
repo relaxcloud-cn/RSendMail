@@ -222,13 +222,13 @@ pub fn detect_language() -> Language {
     let args: Vec<String> = std::env::args().collect();
     for i in 0..args.len() {
         if args[i] == "--lang" && i + 1 < args.len() {
-            if let Some(lang) = Language::from_str(&args[i + 1]) {
+            if let Some(lang) = Language::parse(&args[i + 1]) {
                 return lang;
             }
         }
         if args[i].starts_with("--lang=") {
             let lang_str = args[i].strip_prefix("--lang=").unwrap();
-            if let Some(lang) = Language::from_str(lang_str) {
+            if let Some(lang) = Language::parse(lang_str) {
                 return lang;
             }
         }
@@ -236,7 +236,7 @@ pub fn detect_language() -> Language {
 
     // Then check environment variable
     if let Ok(lang_str) = std::env::var("RSENDMAIL_LANG") {
-        if let Some(lang) = Language::from_str(&lang_str) {
+        if let Some(lang) = Language::parse(&lang_str) {
             return lang;
         }
     }

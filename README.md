@@ -1,5 +1,9 @@
 # RSendMail
 
+<div align="center">
+  <img src="crates/rsendmail-tauri/src-tauri/icons/icon.png" alt="RSendMail Logo" width="180" height="180">
+</div>
+
 A high-performance testing tool for bulk email sending
 
 English | [简体中文](README_zh.md) | [繁體中文](README_zh-TW.md) | [日本語](README_ja.md)
