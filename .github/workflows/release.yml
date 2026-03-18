@@ -7,6 +7,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_VERSION: "1.88.0"
 
 jobs:
   # Linux 构建 (CLI + GUI)
@@ -23,15 +24,17 @@ jobs:
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
       - name: Build CLI
-        run: cargo build --release -p rsendmail-cli
+        run: cargo build --release --locked -p rsendmail-cli
 
       - name: Build GUI
-        run: cargo build --release -p rsendmail-gui
+        run: cargo build --release --locked -p rsendmail-gui
 
       - name: Package artifacts
         run: |
@@ -55,15 +58,17 @@ jobs:
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
       - name: Build CLI
-        run: cargo build --release -p rsendmail-cli
+        run: cargo build --release --locked -p rsendmail-cli
 
       - name: Build GUI
-        run: cargo build --release -p rsendmail-gui
+        run: cargo build --release --locked -p rsendmail-gui
 
       - name: Package artifacts
         run: |
@@ -86,15 +91,17 @@ jobs:
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
       - name: Build CLI
-        run: cargo build --release -p rsendmail-cli
+        run: cargo build --release --locked -p rsendmail-cli
 
       - name: Build GUI
-        run: cargo build --release -p rsendmail-gui
+        run: cargo build --release --locked -p rsendmail-gui
 
       - name: Package artifacts
         run: |
@@ -118,15 +125,17 @@ jobs:
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
       - name: Build CLI
-        run: cargo build --release -p rsendmail-cli
+        run: cargo build --release --locked -p rsendmail-cli
 
       - name: Build GUI
-        run: cargo build --release -p rsendmail-gui
+        run: cargo build --release --locked -p rsendmail-gui
 
       - name: Package artifacts
         run: |

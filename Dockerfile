@@ -1,5 +1,5 @@
 # Build stage
-FROM rust:1.87-slim AS builder
+FROM rust:1.88-slim AS builder
 WORKDIR /usr/src/app
 
 # Install build dependencies
@@ -9,10 +9,11 @@ RUN apt-get update && \
 
 # Copy source code
 COPY Cargo.toml ./
+COPY Cargo.lock ./
 COPY crates/ ./crates/
 
 # Build the CLI
-RUN cargo build --release -p rsendmail-cli
+RUN cargo build --release --locked -p rsendmail-cli
 
 # Runtime stage
 FROM debian:bookworm-slim
