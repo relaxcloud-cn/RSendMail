@@ -4,7 +4,7 @@ members = [
     "crates/rsendmail-i18n",
     "crates/rsendmail-core",
     "crates/rsendmail-cli",
-    "crates/rsendmail-gui", "crates/rsendmail-tauri/src-tauri",
+    "crates/rsendmail-tauri/src-tauri",
 ]
 
 [workspace.package]
@@ -51,7 +51,3 @@ infer = "0.15"
 clap = { version = "4.5", features = ["derive", "env"] }
 simplelog = "0.12"
 ctrlc = "3.4"
-
-# GUI 专用
-slint = "1.9"
-rfd = "0.15"

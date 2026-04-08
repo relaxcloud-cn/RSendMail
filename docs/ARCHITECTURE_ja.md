@@ -2,276 +2,178 @@
 
 [English](ARCHITECTURE.md) | [简体中文](ARCHITECTURE_zh.md) | [繁體中文](ARCHITECTURE_zh-TW.md) | 日本語
 
-本ドキュメントでは、高性能な大量メール送信ツールである RSendMail のアーキテクチャと設計について説明します。
+この文書は、GUI を Tauri に統一した後の RSendMail の現在のアーキテクチャを説明します。
 
 ## 概要
 
-RSendMail は、SMTP 経由でメールのテストと大量送信を行うための Rust ベースのアプリケーションです。CLI と GUI の両方のインターフェースを提供し、共通のコアライブラリを共有しています。
+RSendMail は現在、2 つの利用者向け入口を持っています。
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                   アプリケーション層                      │
-├──────────────────────┬──────────────────────────────────┤
-│    rsendmail-cli     │         rsendmail-gui            │
-│   (コマンドライン)    │        (Slint GUI)               │
-├──────────────────────┴──────────────────────────────────┤
-│                   rsendmail-core                         │
-│                (メール送信エンジン)                       │
-├─────────────────────────────────────────────────────────┤
-│                   rsendmail-i18n                         │
-│                   (国際化対応)                            │
-└─────────────────────────────────────────────────────────┘
+- `rsendmail-cli`: コマンドラインツール
+- `rsendmail-tauri`: デスクトップ GUI
+
+両方とも同じ `rsendmail-core` を共有しており、メール解析、SMTP 送信、再試行、添付処理、統計ロジックを共通化しています。
+
+```text
+┌────────────────────────────────────────────────────────────┐
+│                        アプリ層                            │
+├───────────────────────────┬────────────────────────────────┤
+│      rsendmail-cli        │        rsendmail-tauri        │
+│        Rust CLI           │   Tauri + Vue デスクトップGUI │
+├───────────────────────────┴────────────────────────────────┤
+│                      rsendmail-core                        │
+│        共有メーラー、設定、統計、匿名化ロジック           │
+├────────────────────────────────────────────────────────────┤
+│                      rsendmail-i18n                        │
+│               Rust 側の共有翻訳リソース                    │
+└────────────────────────────────────────────────────────────┘
 ```
 
 ## プロジェクト構成
 
-```
+```text
 RSendMail/
-├── Cargo.toml                      # ワークスペース設定
+├── Cargo.toml
 ├── crates/
-│   ├── rsendmail-i18n/             # 国際化サポート
-│   │   ├── src/lib.rs              # Language 列挙型、tr() 関数
-│   │   └── locales/                # YAML 翻訳ファイル
-│   │       ├── en-US.yml           # 英語 (デフォルト)
-│   │       ├── zh-CN.yml           # 簡体字中国語
-│   │       ├── zh-TW.yml           # 繁体字中国語
-│   │       └── ja-JP.yml           # 日本語
-│   │
-│   ├── rsendmail-core/             # コアライブラリ
+│   ├── rsendmail-i18n/
+│   │   ├── locales/
+│   │   └── src/lib.rs
+│   ├── rsendmail-core/
 │   │   └── src/
-│   │       ├── lib.rs              # ライブラリエクスポート
-│   │       ├── config.rs           # 設定構造体
-│   │       ├── mailer.rs           # メール送信エンジン (~1800 行)
-│   │       ├── stats.rs            # 統計情報収集
-│   │       └── anonymizer.rs       # メールアドレス匿名化
-│   │
-│   ├── rsendmail-cli/              # CLI アプリケーション
+│   │       ├── anonymizer.rs
+│   │       ├── config.rs
+│   │       ├── lib.rs
+│   │       ├── mailer.rs
+│   │       └── stats.rs
+│   ├── rsendmail-cli/
 │   │   └── src/
-│   │       ├── main.rs             # エントリポイント、ループ制御
-│   │       ├── args.rs             # CLI 引数解析 (clap builder)
-│   │       └── logging.rs          # ログ初期化
-│   │
-│   └── rsendmail-gui/              # GUI アプリケーション
-│       ├── src/
-│       │   ├── main.rs             # GUI エントリポイント
-│       │   └── i18n.rs             # GUI 専用 i18n
-│       ├── ui/
-│       │   └── app.slint           # UI 定義
-│       └── fonts/                  # カスタムフォント
-│
+│   │       ├── args.rs
+│   │       ├── logging.rs
+│   │       └── main.rs
+│   └── rsendmail-tauri/
+│       ├── src/                    # Vue 3 + TypeScript フロントエンド
+│       ├── src-tauri/              # Rust Tauri シェルとコマンド
+│       ├── package.json
+│       └── vite.config.ts
 ├── assets/
-│   └── screenshots/                # GUI スクリーンショット
-│
+│   └── screenshots/
 └── docs/
-    └── ARCHITECTURE.md             # 本ドキュメント
+    └── ARCHITECTURE_ja.md
 ```
 
-## Crate 依存関係
+## 依存関係
 
-```
-rsendmail-cli ──┬──► rsendmail-core ──► rsendmail-i18n
-                │
-                └──► rsendmail-i18n
+```text
+rsendmail-cli ─────► rsendmail-core ─────► rsendmail-i18n
 
-rsendmail-gui ──┬──► rsendmail-core ──► rsendmail-i18n
-                │
-                └──► (GUI は独自の HashMap 方式で i18n を実装)
+rsendmail-tauri
+  ├── フロントエンド層（Vue、vue-i18n、@tauri-apps/api）
+  └── src-tauri Rust シェル ─────────────► rsendmail-core
 ```
 
-## コアコンポーネント
+## 主要コンポーネント
 
-### 1. rsendmail-i18n
+### 1. `rsendmail-i18n`
 
-`rust-i18n` ライブラリを使用した共有国際化モジュール。
+`rust-i18n` を使う Rust 側の共有国際化モジュールです。
 
-**機能：**
-- 4 言語対応：英語、簡体字中国語、繁体字中国語、日本語
-- 環境変数とシステムロケールからの言語検出
-- 翻訳関数：`tr(key)` と `tr_with_args(key, args)`
-- YAML ベースの翻訳ファイル（各言語約 250 キー）
+- 翻訳ファイルは `crates/rsendmail-i18n/locales/` に配置
+- Rust コード向けの言語判定を担当
+- `tr()` と `tr_with_args()` を提供
 
-**言語検出の優先順位：**
-1. `--lang` CLI 引数
-2. `RSENDMAIL_LANG` 環境変数
-3. `LANG` / `LC_ALL` 環境変数
-4. macOS `AppleLocale`（macOS のみ）
-5. デフォルトは英語
+### 2. `rsendmail-core`
 
-### 2. rsendmail-core
+CLI と GUI が共有するメール送信エンジンです。
 
-CLI と GUI で共有されるコアメール送信エンジン。
+- `config.rs`: シリアライズ可能な実行設定
+- `mailer.rs`: EML 送信、添付送信、再試行、SMTP セッション処理
+- `stats.rs`: 件数、時間、スループット、レポート
+- `anonymizer.rs`: メールアドレス匿名化
 
-**モジュール：**
+### 3. `rsendmail-cli`
 
-#### config.rs
-- `Config` 構造体（30 以上の設定オプション）
-- Serde シリアライズ対応（保存/読み込み用）
-- すべてのオプションフィールドにデフォルト値
-- `ProcessMode` 列挙型（Auto / Fixed）
+自動化やスクリプト用途の Rust コマンドラインアプリです。
 
-#### mailer.rs (~1800 行)
-3 つの動作モードをサポートする主要なメール送信ロジック：
+- `clap` でローカライズ済み引数を解析
+- ログ初期化と任意のログファイル出力
+- `Mailer` の上で loop / repeat を実行
+- 既存 CLI 挙動を維持
 
-1. **EML モード** (`--dir`)
-   - ディレクトリから EML ファイルを読み込み
-   - 単一の SMTP セッションでの一括送信をサポート
-   - マルチプロセス並列送信
+### 4. `rsendmail-tauri`
 
-2. **添付ファイルモード** (`--attachment`)
-   - 単一ファイルをメール添付として送信
-   - MIME タイプの自動検出
-   - 件名/本文のテンプレートサポート
+デスクトップ GUI は 2 層構成です。
 
-3. **添付ファイルディレクトリモード** (`--attachment-dir`)
-   - ディレクトリ内の各ファイルを個別メールとして送信
-   - 単一添付ファイルモードと同じテンプレートサポート
+- `src/`: Vue 3 + TypeScript + Vite UI
+- `src-tauri/`: フロントエンドへコマンドを公開する Rust Tauri シェル
 
-**接続処理：**
-- プレーンテキスト接続（ポート 25）
-- STARTTLS（ポート 587）
-- 暗黙的 TLS（ポート 465）
-- SMTP 認証（ユーザー名/パスワード）
-- 接続タイムアウトとリトライロジック
-- 接続問題の検出（421 エラー、パイプ破損）
+フロントエンドの責務:
 
-#### stats.rs
-- `Stats` 構造体で追跡：
-  - メール数（合計、成功、失敗）
-  - 解析/送信時間
-  - エラー分類とファイルリスト
-  - QPS（1 秒あたりのクエリ数）計算
-- フォーマット出力用の `Display` trait 実装
+- SMTP と送信モード設定を視覚的に収集
+- Tauri コマンド経由で送信開始・停止
+- Rust からのログ、進捗、統計イベントを購読
+- `vue-i18n` で多言語 UI を描画
 
-#### anonymizer.rs
-- メールアドレスをランダム文字列に置換
-- 一貫性を維持（同じメール → 同じ置換結果）
-- HashMap でキャッシュ
+Rust シェルの責務:
 
-### 3. rsendmail-cli
-
-コマンドラインインターフェースアプリケーション。
-
-**機能：**
-- 30 以上のコマンドラインオプション
-- ローカライズされた `--help` 出力
-- グレースフルシャットダウン（Ctrl+C 処理）
-- ループと繰り返しモード
-- オプションのログファイル出力
-- 失敗メールの保存
-
-**アーキテクチャ：**
-- 実行時 i18n のため clap builder パターン（derive ではなく）を使用
-- CLI 解析前の言語検出
-- Tokio 非同期ランタイム
-
-### 4. rsendmail-gui
-
-Slint フレームワークを使用したグラフィカルユーザーインターフェース。
-
-**機能：**
-- ビジュアル SMTP 設定
-- 3 つの送信モード（モード専用 UI 付き）
-- リアルタイムの進捗と統計
-- ログの表示とエクスポート
-- 設定の保存/読み込み（JSON）
-- 言語切り替え
-- デュアル出力用カスタムロガー（ターミナル + GUI）
-
-**UI コンポーネント：**
-- タブ付きメインウィンドウ
-- SMTP サーバー設定パネル
-- 送信モードセレクター
-- 詳細オプションパネル
-- 統計情報表示
-- ログビューア
+- フロントエンドから `Config` を受け取る
+- `rsendmail-core::Mailer` をそのまま再利用
+- Tauri イベントで実行ログと状態を GUI へ転送
+- `Arc<AtomicBool>` で実行状態を管理
 
 ## データフロー
 
 ### CLI フロー
-```
-main.rs
-  │
-  ├─► detect_language() ──► set_language()
-  │
-  ├─► parse_args() ──► Config
-  │
-  ├─► init_logging()
-  │
-  ├─► Mailer::new(config)
-  │
-  └─► ループ:
-        │
-        ├─► mailer.send_all_with_cancel(running)
-        │     │
-        │     ├─► EML モード: collect_email_files() → send_fixed_mode()
-        │     ├─► 添付ファイルモード: send_attachment_with_cancel()
-        │     └─► 添付ファイルディレクトリモード: send_attachment_dir_with_cancel()
-        │
-        ├─► Stats を累積
-        │
-        └─► 次のイテレーションを待機（ループ/繰り返しモードの場合）
+
+```text
+CLI 引数
+  -> rsendmail-cli
+  -> Config
+  -> rsendmail-core::Mailer
+  -> SMTP / ファイルシステム処理
+  -> ログと統計出力
 ```
 
 ### GUI フロー
-```
-main.rs
-  │
-  ├─► init_logger() (GuiLogger)
-  │
-  ├─► AppWindow::new()
-  │
-  ├─► setup_i18n()
-  │
-  ├─► setup_callbacks()
-  │     │
-  │     ├─► on_start_send() ──► 非同期タスクを起動
-  │     │     │
-  │     │     └─► Mailer::send_all_with_cancel()
-  │     │           │
-  │     │           └─► mpsc チャネル経由でイベント送信
-  │     │
-  │     ├─► on_stop_send() ──► running = false を設定
-  │     │
-  │     ├─► on_browse_*() ──► ファイルダイアログ
-  │     │
-  │     └─► on_save/load_config() ──► JSON シリアライズ/デシリアライズ
-  │
-  └─► app.run()
+
+```text
+Vue UI
+  -> invoke("start_sending", Config)
+  -> Tauri コマンドハンドラ
+  -> rsendmail-core::Mailer
+  -> ログ / 進捗 / 統計イベントを送出
+  -> Vue リスナーがデスクトップ UI を更新
 ```
 
-## 主要な依存関係
+## 主な依存関係
 
-| 依存関係 | 用途 |
+| 依存関係 | 役割 |
 |----------|------|
-| tokio | 非同期ランタイム |
-| mail-send | SMTP クライアント |
-| mail-parser | EML ファイル解析 |
-| mail-builder | メール構築 |
-| clap | CLI 引数解析 |
-| slint | GUI フレームワーク |
-| rust-i18n | 国際化 |
-| serde | 設定のシリアライズ |
-| walkdir | ディレクトリ走査 |
-| infer | MIME タイプ検出 |
+| `tokio` | 非同期ランタイム |
+| `mail-send` | SMTP クライアント |
+| `mail-parser` | EML 解析 |
+| `mail-builder` | メールと添付生成 |
+| `clap` | CLI 引数解析 |
+| `tauri` | デスクトップアプリシェル |
+| `vue` | GUI コンポーネントランタイム |
+| `vite` | フロントエンドビルドツール |
+| `vue-i18n` | GUI 翻訳 |
+| `serde` / `serde_json` | 共有設定シリアライズ |
 
-## エラー処理
+## 並行性と状態
 
-- `anyhow::Result` でアプリケーションレベルのエラー
-- `Stats.increment_error()` で各メールのエラー追跡
-- タイプ別エラー分類（接続、認証、送信、解析）
-- 後の分析用に失敗メールファイルを保存
+- `Arc<AtomicBool>` で送信処理の開始・停止を制御
+- `Mutex<Option<AppHandle>>` により Rust ロガーから GUI へメッセージ転送
+- Tokio タスクにより送信中でも GUI 応答性を維持
 
-## スレッドセーフティ
+## 設定モデル
 
-- `Arc<AtomicBool>` でグレースフルシャットダウンシグナル
-- `Arc<Mutex<...>>` で GUI ロガーの共有状態
-- Tokio チャネルで GUI イベント通信
-- マルチプロセスモードでプロセスごとの統計情報
+`Config` は CLI と GUI が共有する契約です。
 
-## 設定
+- CLI は引数解析から構築
+- Tauri GUI は Vue フロントエンドから Rust コマンドへ送信
+- Serde により保存、読込、相互運用を安定化
 
-`Config` 構造体のサポート：
-- コード内でのフィールド直接アクセス
-- GUI 保存/読み込み用の JSON シリアライズ
-- CLI 引数解析
-- すべてのオプションフィールドにデフォルト値
+## 保守方針
+
+- 明示的な要求がない限り CLI 挙動は壊さない
+- GUI 関連の変更はできるだけ `crates/rsendmail-tauri/` に閉じ込める
+- メール送信ロジックの変更は通常 `rsendmail-core` に実装する

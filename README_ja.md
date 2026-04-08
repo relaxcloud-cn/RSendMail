@@ -21,7 +21,7 @@
 
 ## 機能
 
-- **CLI と GUI の両モード**：コマンドラインとグラフィカルインターフェースをサポート
+- **CLI + Tauri GUI の二重入口**：コマンドラインとデスクトップ GUI は同じ Rust コアロジックを共有
 - 複数メールの一括処理と送信
 - マルチスレッド処理による高性能化
 - カスタム SMTP サーバー設定のサポート
@@ -53,7 +53,7 @@ RSendMail は、EML ファイルを事前に作成することなく、通常の
 
 ## 多言語サポート
 
-RSendMail の CLI と GUI インターフェースは複数の言語をサポートしています：
+RSendMail の CLI と Tauri GUI インターフェースは複数の言語をサポートしています：
 
 | 言語 | コード | 環境変数 |
 |------|--------|----------|
@@ -104,8 +104,17 @@ rsendmail --lang ja --help
 
 ### ローカルビルド
 ```bash
-cd rsendmail
-cargo build --release
+# CLI をビルド
+cargo build --release -p rsendmail-cli
+
+# GUI フロントエンド資産をビルド
+cd crates/rsendmail-tauri
+npm ci
+npm run build
+cd ../..
+
+# Tauri GUI をビルド
+cargo build --release -p rsendmail-tauri
 ```
 
 ### Docker ビルド
@@ -116,9 +125,9 @@ docker build -t rsendmail .
 ## 使用方法
 
 ### Windows での使用
-[Releases](https://github.com/kpassy/RSendMail/releases) ページから Windows 実行ファイル（`rsendmail-windows-x86_64.exe`）をダウンロードしてください。
+[Releases](https://github.com/kpassy/RSendMail/releases) ページから Windows CLI 実行ファイル（`rsendmail-cli-windows-x86_64.exe`）をダウンロードしてください。
 ```bash
-rsendmail-windows-x86_64.exe --smtp-server <SMTPサーバー> --port <ポート> --from <送信者> --to <受信者> --dir <メールディレクトリ> --processes <プロセス数> --batch-size <バッチサイズ>
+rsendmail-cli-windows-x86_64.exe --smtp-server <SMTPサーバー> --port <ポート> --from <送信者> --to <受信者> --dir <メールディレクトリ> --processes <プロセス数> --batch-size <バッチサイズ>
 ```
 
 ### ローカルでの使用

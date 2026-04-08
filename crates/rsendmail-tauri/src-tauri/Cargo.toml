@@ -1,17 +1,13 @@
 [package]
-name = "cratesrsendmail-taurirsendmail-tauri"
-version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+name = "rsendmail-tauri"
+description = "RSendMail desktop GUI powered by Tauri"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
 
 [lib]
-# The `_lib` suffix may seem redundant but it is necessary
-# to make the lib name unique and wouldn't conflict with the bin name.
-# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
-name = "cratesrsendmail_taurirsendmail_tauri_lib"
+name = "rsendmail_tauri_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -28,4 +24,3 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 log.workspace = true
 chrono.workspace = true
-

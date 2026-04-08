@@ -26,7 +26,7 @@ English | [简体中文](README_zh.md) | [繁體中文](README_zh-TW.md) | [日�
 
 ## Features
 
-- **CLI & GUI**: Both command-line and graphical user interface available
+- **CLI + Tauri GUI**: Command-line workflow and desktop GUI share the same Rust core
 - Batch processing and sending of multiple emails
 - Multi-threaded processing for improved performance
 - Custom SMTP server configuration
@@ -44,10 +44,10 @@ Download pre-built binaries from the [Releases](https://github.com/kpassy/RSendM
 
 | Platform | CLI | GUI |
 |----------|-----|-----|
-| Linux x86_64 | `rsendmail-cli-linux-x86_64` | `rsendmail-gui-linux-x86_64` |
-| Windows x86_64 | `rsendmail-cli-windows-x86_64.exe` | `rsendmail-gui-windows-x86_64.exe` |
-| macOS Intel | `rsendmail-cli-darwin-x86_64` | `rsendmail-gui-darwin-x86_64` |
-| macOS Apple Silicon | `rsendmail-cli-darwin-arm64` | `rsendmail-gui-darwin-arm64` |
+| Linux x86_64 | `rsendmail-cli-linux-x86_64` | `rsendmail-tauri-linux-x86_64` |
+| Windows x86_64 | `rsendmail-cli-windows-x86_64.exe` | `rsendmail-tauri-windows-x86_64.exe` |
+| macOS Intel | `rsendmail-cli-darwin-x86_64` | `rsendmail-tauri-darwin-x86_64` |
+| macOS Apple Silicon | `rsendmail-cli-darwin-arm64` | `rsendmail-tauri-darwin-arm64` |
 
 ## Build
 
@@ -57,8 +57,14 @@ Download pre-built binaries from the [Releases](https://github.com/kpassy/RSendM
 # Build CLI only
 cargo build --release -p rsendmail-cli
 
+# Build GUI frontend assets
+cd crates/rsendmail-tauri
+npm ci
+npm run build
+cd ../..
+
 # Build GUI only
-cargo build --release -p rsendmail-gui
+cargo build --release -p rsendmail-tauri
 
 # Build all
 cargo build --release --workspace
@@ -71,13 +77,13 @@ docker build -t rsendmail .
 
 ## GUI Usage
 
-Simply run the GUI executable:
+The desktop GUI is implemented with Tauri + Vue 3 + TypeScript + Vite. Build the frontend assets first, then run the GUI executable:
 ```bash
 # Linux/macOS
-./rsendmail-gui
+./target/release/rsendmail-tauri
 
 # Windows
-rsendmail-gui.exe
+target\release\rsendmail-tauri.exe
 ```
 
 The GUI supports:
@@ -93,7 +99,7 @@ The GUI supports:
 ### Windows
 Download Windows executable (`rsendmail-cli-windows-x86_64.exe`) from the [Releases](https://github.com/kpassy/RSendMail/releases) page.
 ```bash
-rsendmail-windows-x86_64.exe --smtp-server <smtp_server> --port <port> --from <sender> --to <recipient> --dir <email_directory> --processes <num_processes> --batch-size <batch_size>
+rsendmail-cli-windows-x86_64.exe --smtp-server <smtp_server> --port <port> --from <sender> --to <recipient> --dir <email_directory> --processes <num_processes> --batch-size <batch_size>
 ```
 
 ### Local Usage

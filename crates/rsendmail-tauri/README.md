@@ -1,7 +1,25 @@
-# Tauri + Vue + TypeScript
+# rsendmail-tauri
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+Desktop GUI for RSendMail built with Tauri, Vue 3, TypeScript, and Vite.
+
+## Development
+
+```bash
+npm ci
+npm run dev
+```
+
+## Production Build
+
+```bash
+npm ci
+npm run build
+cargo build --release --manifest-path src-tauri/Cargo.toml
+```
 
 ## Recommended IDE Setup
 
-- [VS Code](https://code.visualstudio.com/) + [Vue - Official](https://marketplace.visualstudio.com/items?itemName=Vue.volar) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+- VS Code
+- Vue - Official (Volar)
+- Tauri VS Code extension
+- rust-analyzer

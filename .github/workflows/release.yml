@@ -8,6 +8,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_VERSION: "1.88.0"
+  NODE_VERSION: "22"
 
 jobs:
   # Linux 构建 (CLI + GUI)
@@ -20,12 +21,19 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libfontconfig1-dev libfreetype6-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget libappindicator3-dev librsvg2-dev patchelf
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: crates/rsendmail-tauri/package-lock.json
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -33,20 +41,64 @@ jobs:
       - name: Build CLI
         run: cargo build --release --locked -p rsendmail-cli
 
+      - name: Build GUI frontend
+        working-directory: crates/rsendmail-tauri
+        run: |
+          npm ci
+          npm run build
+
       - name: Build GUI
-        run: cargo build --release --locked -p rsendmail-gui
+        run: cargo build --release --locked -p rsendmail-tauri
 
       - name: Package artifacts
         run: |
           mkdir -p dist
           cp target/release/rsendmail dist/rsendmail-cli-linux-x86_64
-          cp target/release/rsendmail-gui dist/rsendmail-gui-linux-x86_64
+          cp target/release/rsendmail-tauri dist/rsendmail-tauri-linux-x86_64
           chmod +x dist/*
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux-binaries
+          path: dist/
+
+  # Linux ARM64 构建 (仅 CLI，交叉编译)
+  build-linux-arm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install cross-compilation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-unknown-linux-gnu
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build CLI for ARM64
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: cargo build --release --locked -p rsendmail-cli --target aarch64-unknown-linux-gnu
+
+      - name: Package artifacts
+        run: |
+          mkdir -p dist
+          cp target/aarch64-unknown-linux-gnu/release/rsendmail dist/rsendmail-cli-linux-arm64
+          chmod +x dist/*
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-arm-binaries
           path: dist/
 
   # Windows 构建 (CLI + GUI)
@@ -61,20 +113,33 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: crates/rsendmail-tauri/package-lock.json
+
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
       - name: Build CLI
         run: cargo build --release --locked -p rsendmail-cli
 
+      - name: Build GUI frontend
+        working-directory: crates/rsendmail-tauri
+        run: |
+          npm ci
+          npm run build
+
       - name: Build GUI
-        run: cargo build --release --locked -p rsendmail-gui
+        run: cargo build --release --locked -p rsendmail-tauri
 
       - name: Package artifacts
         run: |
           mkdir dist
           copy target\release\rsendmail.exe dist\rsendmail-cli-windows-x86_64.exe
-          copy target\release\rsendmail-gui.exe dist\rsendmail-gui-windows-x86_64.exe
+          copy target\release\rsendmail-tauri.exe dist\rsendmail-tauri-windows-x86_64.exe
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -94,20 +159,33 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: crates/rsendmail-tauri/package-lock.json
+
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
       - name: Build CLI
         run: cargo build --release --locked -p rsendmail-cli
 
+      - name: Build GUI frontend
+        working-directory: crates/rsendmail-tauri
+        run: |
+          npm ci
+          npm run build
+
       - name: Build GUI
-        run: cargo build --release --locked -p rsendmail-gui
+        run: cargo build --release --locked -p rsendmail-tauri
 
       - name: Package artifacts
         run: |
           mkdir -p dist
           cp target/release/rsendmail dist/rsendmail-cli-darwin-x86_64
-          cp target/release/rsendmail-gui dist/rsendmail-gui-darwin-x86_64
+          cp target/release/rsendmail-tauri dist/rsendmail-tauri-darwin-x86_64
           chmod +x dist/*
 
       - name: Upload artifacts
@@ -128,20 +206,33 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: crates/rsendmail-tauri/package-lock.json
+
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
       - name: Build CLI
         run: cargo build --release --locked -p rsendmail-cli
 
+      - name: Build GUI frontend
+        working-directory: crates/rsendmail-tauri
+        run: |
+          npm ci
+          npm run build
+
       - name: Build GUI
-        run: cargo build --release --locked -p rsendmail-gui
+        run: cargo build --release --locked -p rsendmail-tauri
 
       - name: Package artifacts
         run: |
           mkdir -p dist
           cp target/release/rsendmail dist/rsendmail-cli-darwin-arm64
-          cp target/release/rsendmail-gui dist/rsendmail-gui-darwin-arm64
+          cp target/release/rsendmail-tauri dist/rsendmail-tauri-darwin-arm64
           chmod +x dist/*
 
       - name: Upload artifacts
@@ -152,7 +243,7 @@ jobs:
 
   # 创建 Release 并构建 Docker 镜像
   release:
-    needs: [build-linux, build-windows, build-macos-intel, build-macos-arm]
+    needs: [build-linux, build-linux-arm, build-windows, build-macos-intel, build-macos-arm]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -164,6 +255,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: linux-binaries
+          path: dist/
+
+      - name: Download Linux ARM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-arm-binaries
           path: dist/
 
       - name: Download Windows artifacts
@@ -192,13 +289,14 @@ jobs:
         with:
           files: |
             dist/rsendmail-cli-linux-x86_64
-            dist/rsendmail-gui-linux-x86_64
+            dist/rsendmail-tauri-linux-x86_64
+            dist/rsendmail-cli-linux-arm64
             dist/rsendmail-cli-windows-x86_64.exe
-            dist/rsendmail-gui-windows-x86_64.exe
+            dist/rsendmail-tauri-windows-x86_64.exe
             dist/rsendmail-cli-darwin-x86_64
-            dist/rsendmail-gui-darwin-x86_64
+            dist/rsendmail-tauri-darwin-x86_64
             dist/rsendmail-cli-darwin-arm64
-            dist/rsendmail-gui-darwin-arm64
+            dist/rsendmail-tauri-darwin-arm64
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

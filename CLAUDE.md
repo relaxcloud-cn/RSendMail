@@ -31,14 +31,11 @@ RSendMail/
 │   │       ├── main.rs           # CLI entry point
 │   │       ├── args.rs           # CLI argument parsing (clap builder pattern)
 │   │       └── logging.rs        # Logging initialization
-│   └── rsendmail-gui/            # GUI application (Slint-based)
-│       └── src/
-│           ├── main.rs           # GUI entry point
-│           └── i18n.rs           # GUI-specific i18n helpers
-├── rsendmail/                    # [DEPRECATED] Old single-crate structure
+│   └── rsendmail-tauri/          # Tauri desktop GUI
+│       ├── src/                  # Vue 3 + TypeScript frontend
+│       └── src-tauri/            # Rust/Tauri shell and commands
 └── docs/
-    ├── ARCHITECTURE.md           # Architecture design document
-    └── GUI_DESIGN.md             # GUI functional design document
+    └── ARCHITECTURE.md           # Architecture design document
 ```
 
 ## Build Commands
@@ -52,6 +49,12 @@ cargo build --release --workspace
 
 # Build only CLI
 cargo build -p rsendmail-cli
+
+# Build Tauri frontend assets
+cd crates/rsendmail-tauri && npm ci && npm run build
+
+# Build only GUI
+cargo build -p rsendmail-tauri
 
 # Build only core library
 cargo build -p rsendmail-core
@@ -91,7 +94,8 @@ The CLI application provides command-line interface:
 - `tokio` - Async runtime (full features)
 - `clap` - CLI argument parsing with builder pattern for runtime i18n (CLI only)
 - `simplelog` - Logging with optional file output (CLI only)
-- `serde` / `serde_json` - Configuration serialization (for future GUI)
+- `serde` / `serde_json` - Configuration serialization shared by CLI and Tauri GUI
+- `tauri` - Desktop application shell for the GUI
 - `rust-i18n` - Internationalization support with YAML translation files
 
 ## Three Operating Modes
@@ -144,5 +148,4 @@ The project supports 4 languages: English, Simplified Chinese, Traditional Chine
 
 ## Design Documents
 
-- `docs/ARCHITECTURE.md` - Detailed architecture design for workspace refactoring
-- `docs/GUI_DESIGN.md` - GUI functional design for future Slint-based GUI application
+- `docs/ARCHITECTURE.md` - Detailed architecture design for the shared core, CLI, and Tauri GUI

@@ -2,284 +2,178 @@
 
 English | [简体中文](ARCHITECTURE_zh.md) | [繁體中文](ARCHITECTURE_zh-TW.md) | [日本語](ARCHITECTURE_ja.md)
 
-This document describes the architecture and design of RSendMail, a high-performance bulk email sending tool.
+This document describes the current RSendMail architecture after consolidating the GUI onto Tauri.
 
 ## Overview
 
-RSendMail is a Rust-based application for testing and sending bulk emails via SMTP. It provides both CLI and GUI interfaces, sharing a common core library.
+RSendMail has two user-facing applications:
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Applications                          │
-├──────────────────────┬──────────────────────────────────┤
-│    rsendmail-cli     │         rsendmail-gui            │
-│   (Command Line)     │      (Slint GUI)                 │
-├──────────────────────┴──────────────────────────────────┤
-│                   rsendmail-core                         │
-│            (Email Sending Engine)                        │
-├─────────────────────────────────────────────────────────┤
-│                   rsendmail-i18n                         │
-│            (Internationalization)                        │
-└─────────────────────────────────────────────────────────┘
+- `rsendmail-cli` for command-line workflows
+- `rsendmail-tauri` for the desktop GUI
+
+Both entrypoints share the same `rsendmail-core` business logic so mail parsing, SMTP sending, retries, attachment handling, and statistics stay consistent across CLI and GUI.
+
+```text
+┌────────────────────────────────────────────────────────────┐
+│                       Applications                         │
+├───────────────────────────┬────────────────────────────────┤
+│      rsendmail-cli        │        rsendmail-tauri        │
+│      (Rust CLI)           │   (Tauri + Vue desktop GUI)   │
+├───────────────────────────┴────────────────────────────────┤
+│                      rsendmail-core                        │
+│          Shared mailer, config, stats, anonymizer         │
+├────────────────────────────────────────────────────────────┤
+│                      rsendmail-i18n                        │
+│           Shared translation source for Rust code         │
+└────────────────────────────────────────────────────────────┘
 ```
 
 ## Project Structure
 
-```
+```text
 RSendMail/
-├── Cargo.toml                      # Workspace configuration
+├── Cargo.toml
 ├── crates/
-│   ├── rsendmail-i18n/             # Internationalization support
-│   │   ├── src/lib.rs              # Language enum, tr() functions
-│   │   └── locales/                # YAML translation files
-│   │       ├── en-US.yml           # English (fallback)
-│   │       ├── zh-CN.yml           # Simplified Chinese
-│   │       ├── zh-TW.yml           # Traditional Chinese
-│   │       └── ja-JP.yml           # Japanese
-│   │
-│   ├── rsendmail-core/             # Core library
+│   ├── rsendmail-i18n/
+│   │   ├── locales/                # YAML translations
+│   │   └── src/lib.rs
+│   ├── rsendmail-core/
 │   │   └── src/
-│   │       ├── lib.rs              # Library exports
-│   │       ├── config.rs           # Configuration structure
-│   │       ├── mailer.rs           # Email sending engine (~1800 lines)
-│   │       ├── stats.rs            # Statistics collection
-│   │       └── anonymizer.rs       # Email anonymization
-│   │
-│   ├── rsendmail-cli/              # CLI application
+│   │       ├── anonymizer.rs
+│   │       ├── config.rs
+│   │       ├── lib.rs
+│   │       ├── mailer.rs
+│   │       └── stats.rs
+│   ├── rsendmail-cli/
 │   │   └── src/
-│   │       ├── main.rs             # Entry point, loop control
-│   │       ├── args.rs             # CLI argument parsing (clap builder)
-│   │       └── logging.rs          # Log initialization
-│   │
-│   └── rsendmail-gui/              # GUI application
-│       ├── src/
-│       │   ├── main.rs             # GUI entry point
-│       │   └── i18n.rs             # GUI-specific i18n
-│       ├── ui/
-│       │   └── app.slint           # UI definition
-│       └── fonts/                  # Custom fonts
-│
+│   │       ├── args.rs
+│   │       ├── logging.rs
+│   │       └── main.rs
+│   └── rsendmail-tauri/
+│       ├── src/                    # Vue 3 + TypeScript frontend
+│       ├── src-tauri/              # Rust Tauri shell and commands
+│       ├── package.json
+│       └── vite.config.ts
 ├── assets/
-│   └── screenshots/                # GUI screenshots
-│
+│   └── screenshots/
 └── docs/
-    └── ARCHITECTURE.md             # This file
+    └── ARCHITECTURE.md
 ```
 
-## Crate Dependencies
+## Dependency Relationships
 
-```
-rsendmail-cli ──┬──► rsendmail-core ──► rsendmail-i18n
-                │
-                └──► rsendmail-i18n
+```text
+rsendmail-cli ─────► rsendmail-core ─────► rsendmail-i18n
 
-rsendmail-gui ──┬──► rsendmail-core ──► rsendmail-i18n
-                │
-                └──► (GUI has its own i18n via HashMap)
+rsendmail-tauri
+  ├── frontend (Vue, vue-i18n, @tauri-apps/api)
+  └── src-tauri (Rust shell) ─────► rsendmail-core
 ```
 
 ## Core Components
 
-### 1. rsendmail-i18n
+### 1. `rsendmail-i18n`
 
-Shared internationalization module using `rust-i18n` library.
+Shared Rust translation layer powered by `rust-i18n`.
 
-**Features:**
-- 4 supported languages: English, Simplified Chinese, Traditional Chinese, Japanese
-- Language detection from environment variables and system locale
-- Translation functions: `tr(key)` and `tr_with_args(key, args)`
-- YAML-based translation files (~250 keys per language)
+- Stores YAML translation files under `crates/rsendmail-i18n/locales/`
+- Handles language detection for Rust-side code
+- Exposes `tr()` and `tr_with_args()` helpers
 
-**Language Detection Priority:**
-1. `--lang` CLI argument
-2. `RSENDMAIL_LANG` environment variable
-3. `LANG` / `LC_ALL` environment variables
-4. macOS `AppleLocale` (on macOS)
-5. Default to English
+### 2. `rsendmail-core`
 
-### 2. rsendmail-core
+Shared mail engine used by both CLI and GUI.
 
-The core email sending engine, shared by CLI and GUI.
+- `config.rs`: serializable runtime configuration
+- `mailer.rs`: EML sending, attachment sending, retries, SMTP session handling
+- `stats.rs`: counters, durations, throughput, and reporting
+- `anonymizer.rs`: deterministic email address anonymization
 
-**Modules:**
+### 3. `rsendmail-cli`
 
-#### config.rs
-- `Config` struct with 30+ configuration options
-- Serde serialization support for save/load
-- Default values for all optional fields
-- `ProcessMode` enum (Auto / Fixed)
+Rust command-line application for automation and scripting.
 
-#### mailer.rs (~1800 lines)
-The main email sending logic with three operating modes:
+- Parses localized CLI arguments with `clap`
+- Initializes logging and optional log-file output
+- Runs repeat/loop workflows on top of `Mailer`
+- Preserves backward-compatible CLI behavior
 
-1. **EML Mode** (`--dir`)
-   - Reads EML files from a directory
-   - Supports batch sending in single SMTP session
-   - Multi-process parallel sending
+### 4. `rsendmail-tauri`
 
-2. **Attachment Mode** (`--attachment`)
-   - Sends a single file as email attachment
-   - Auto-detects MIME type
-   - Template support for subject/body
+Desktop GUI split into two layers:
 
-3. **Attachment Directory Mode** (`--attachment-dir`)
-   - Sends each file in directory as separate email
-   - Same template support as single attachment
+- `src/`: Vue 3 + TypeScript + Vite UI
+- `src-tauri/`: Rust Tauri shell exposing commands to the frontend
 
-**Connection Handling:**
-- Plain text connection (port 25)
-- STARTTLS (port 587)
-- Implicit TLS (port 465)
-- SMTP authentication (username/password)
-- Connection timeout and retry logic
-- Connection problem detection (421 errors, broken pipe)
+Key frontend responsibilities:
 
-#### stats.rs
-- `Stats` struct for tracking:
-  - Email count (total, success, failed)
-  - Parse/send durations
-  - Error classification with file lists
-  - QPS (queries per second) calculation
-- Implements `Display` trait for formatted output
+- Collect SMTP and send-mode configuration visually
+- Start and stop sending through Tauri commands
+- Listen for log, progress, and stats events from Rust
+- Render multilingual desktop UI with `vue-i18n`
 
-#### anonymizer.rs
-- Replaces email addresses with random strings
-- Maintains consistency (same email → same replacement)
-- Uses HashMap for caching
+Key Rust-shell responsibilities:
 
-### 3. rsendmail-cli
-
-Command-line interface application.
-
-**Features:**
-- 30+ command-line options
-- Localized `--help` output
-- Graceful shutdown (Ctrl+C handling)
-- Loop and repeat modes
-- Optional log file output
-- Failed email saving
-
-**Architecture:**
-- Uses clap builder pattern (not derive) for runtime i18n
-- Early language detection before CLI parsing
-- Tokio async runtime
-
-### 4. rsendmail-gui
-
-Graphical user interface using Slint framework.
-
-**Features:**
-- Visual SMTP configuration
-- Three sending modes with mode-specific UI
-- Real-time progress and statistics
-- Log viewing with export
-- Configuration save/load (JSON)
-- Language switcher
-- Custom logger for dual output (terminal + GUI)
-
-**UI Components:**
-- Main window with tabbed sections
-- SMTP server settings panel
-- Send mode selector
-- Advanced options panel
-- Statistics display
-- Log viewer
+- Receive `Config` from the frontend
+- Reuse `rsendmail-core::Mailer` directly
+- Forward runtime logs and progress to the GUI through Tauri events
+- Maintain app-level running state with `Arc<AtomicBool>`
 
 ## Data Flow
 
 ### CLI Flow
-```
-main.rs
-  │
-  ├─► detect_language() ──► set_language()
-  │
-  ├─► parse_args() ──► Config
-  │
-  ├─► init_logging()
-  │
-  ├─► Mailer::new(config)
-  │
-  └─► Loop:
-        │
-        ├─► mailer.send_all_with_cancel(running)
-        │     │
-        │     ├─► EML mode: collect_email_files() → send_fixed_mode()
-        │     ├─► Attachment mode: send_attachment_with_cancel()
-        │     └─► Attachment-dir mode: send_attachment_dir_with_cancel()
-        │
-        ├─► Accumulate Stats
-        │
-        └─► Wait for next iteration (if loop/repeat)
+
+```text
+CLI args
+  -> rsendmail-cli
+  -> Config
+  -> rsendmail-core::Mailer
+  -> SMTP / filesystem operations
+  -> logs + stats output
 ```
 
 ### GUI Flow
-```
-main.rs
-  │
-  ├─► init_logger() (GuiLogger)
-  │
-  ├─► AppWindow::new()
-  │
-  ├─► setup_i18n()
-  │
-  ├─► setup_callbacks()
-  │     │
-  │     ├─► on_start_send() ──► spawn async task
-  │     │     │
-  │     │     └─► Mailer::send_all_with_cancel()
-  │     │           │
-  │     │           └─► Send events via mpsc channel
-  │     │
-  │     ├─► on_stop_send() ──► set running = false
-  │     │
-  │     ├─► on_browse_*() ──► file dialogs
-  │     │
-  │     └─► on_save/load_config() ──► JSON serialize/deserialize
-  │
-  └─► app.run()
+
+```text
+Vue UI
+  -> invoke("start_sending", Config)
+  -> Tauri command handler
+  -> rsendmail-core::Mailer
+  -> emit log/progress/stats events
+  -> Vue listeners update the desktop UI
 ```
 
 ## Key Dependencies
 
 | Dependency | Purpose |
 |------------|---------|
-| tokio | Async runtime |
-| mail-send | SMTP client |
-| mail-parser | EML file parsing |
-| mail-builder | Email construction |
-| clap | CLI argument parsing |
-| slint | GUI framework |
-| rust-i18n | Internationalization |
-| serde | Configuration serialization |
-| walkdir | Directory traversal |
-| infer | MIME type detection |
+| `tokio` | Async runtime |
+| `mail-send` | SMTP client |
+| `mail-parser` | EML parsing |
+| `mail-builder` | Attachment/body construction |
+| `clap` | CLI argument parsing |
+| `tauri` | Desktop app shell |
+| `vue` | GUI component runtime |
+| `vite` | Frontend build tool |
+| `vue-i18n` | GUI translations |
+| `serde` / `serde_json` | Shared configuration serialization |
 
-## Error Handling
+## Concurrency and State
 
-- `anyhow::Result` for application-level errors
-- `Stats.increment_error()` for per-email error tracking
-- Error classification by type (connection, auth, send, parse)
-- Failed email file saving for later analysis
+- `Arc<AtomicBool>` controls start/stop behavior for active send loops
+- `Mutex<Option<AppHandle>>` lets the Rust logger forward messages to the GUI
+- Tokio tasks keep the desktop UI responsive while mail sending runs
 
-## Thread Safety
+## Configuration Model
 
-- `Arc<AtomicBool>` for graceful shutdown signaling
-- `Arc<Mutex<...>>` for shared state in GUI logger
-- Tokio channels for GUI event communication
-- Per-process stats in multi-process mode
+The `Config` struct is the contract shared by CLI and GUI.
 
-## Configuration
+- CLI builds it from parsed arguments
+- Tauri GUI sends it from the Vue frontend into Rust commands
+- Serde keeps save/load and interop predictable
 
-The `Config` struct supports:
-- Direct field access in code
-- JSON serialization for GUI save/load
-- CLI argument parsing
-- Default values for all optional fields
+## Maintenance Notes
 
-## Future Considerations
-
-- Additional email providers beyond SMTP
-- Email template library
-- Scheduling and queue management
-- Web-based dashboard
-- Plugin system for custom processors
+- CLI behavior should remain stable unless explicitly changed
+- GUI-only changes should live under `crates/rsendmail-tauri/`
+- Mail-sending behavior should usually be implemented in `rsendmail-core`
